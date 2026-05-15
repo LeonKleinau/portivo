@@ -7,12 +7,12 @@ import plotly.graph_objects as go
 from calculations import (
     amortisation_schedule,
     cash_on_cash,
-    equity_buildup,
     gesamtrendite_components,
     gross_yield,
     net_yield,
     true_total_return,
 )
+from engagement import all_alerts
 from utils import (
     euro,
     format_german_number,
@@ -151,9 +151,11 @@ if edit_mode:
             for e in errors:
                 st.error(e)
         else:
+            existing_prop = get_property(property_id) or {}
             save_user_property(
                 property_id,
                 {
+                    **existing_prop,
                     "property_id": property_id,
                     "address": new_address.strip(),
                     "purchase_price": int(round(purchase_price)),
@@ -165,10 +167,12 @@ if edit_mode:
                 },
             )
             if new_bank.strip() and darlehen and darlehen > 0:
+                existing_loan = get_loan(property_id) or {}
                 save_user_loan(
                     property_id,
                     {
-                        "loan_id": f"USER-{property_id}",
+                        **existing_loan,
+                        "loan_id": existing_loan.get("loan_id", f"USER-{property_id}"),
                         "property_id": property_id,
                         "bank": new_bank.strip(),
                         "darlehenssumme": int(round(darlehen)),
@@ -260,6 +264,21 @@ else:
             st.write(
                 f"**Gesamtrendite (ohne Finanzierung):** {percent(true_total_return(annual_rent, annual_opex, 0, 0, p['kaufnebenkosten_total'], total_acq))}"
             )
+
+    st.divider()
+    st.subheader("Hinweise & Termine")
+    alerts = all_alerts(p, loan)
+    if not alerts:
+        st.success("Keine offenen Hinweise zu dieser Wohnung.")
+    else:
+        for alert in alerts:
+            sev = alert["severity"]
+            if sev == "urgent":
+                st.error(f"**{alert['title']}**\n\n{alert['detail']}")
+            elif sev == "warning":
+                st.warning(f"**{alert['title']}**\n\n{alert['detail']}")
+            else:
+                st.info(f"**{alert['title']}**\n\n{alert['detail']}")
 
     st.divider()
     st.subheader("Cashflow (monatlich)")
@@ -363,99 +382,6 @@ else:
             f"projizierte Restschuld {euro(zb_balance)} — {percent(tilgung_pct_done)} getilgt. "
             f"Nach diesem Zeitpunkt benötigt das Darlehen eine Anschlussfinanzierung zum dann gültigen Marktzins."
         )
-
-    st.divider()
-    st.subheader("Eigenkapitalaufbau")
-
-    if loan:
-        eq_schedule = amortisation_schedule(
-            loan["darlehenssumme"],
-            loan["zinssatz_pct"],
-            loan["tilgung_anfang_pct"],
-            years=40,
-        )
-        eq_initial_loan = loan["darlehenssumme"]
-    else:
-        eq_schedule = []
-        eq_initial_loan = 0
-    eq_eingesetzt = total_acq - eq_initial_loan
-    eq_horizon = max(len(eq_schedule), 30)
-
-    appr_pct = st.slider(
-        "Angenommene jährliche Wertsteigerung (%)",
-        min_value=0.0,
-        max_value=5.0,
-        value=2.0,
-        step=0.25,
-        format="%.2f %%",
-        key=f"appr_slider_{property_id}",
-    )
-
-    buildup_conservative = equity_buildup(
-        purchase_price=p["purchase_price"],
-        initial_loan=eq_initial_loan,
-        appreciation_pct_annual=0.0,
-        amort_schedule=eq_schedule,
-        horizon_years=eq_horizon,
-    )
-    buildup_appreciated = equity_buildup(
-        purchase_price=p["purchase_price"],
-        initial_loan=eq_initial_loan,
-        appreciation_pct_annual=appr_pct,
-        amort_schedule=eq_schedule,
-        horizon_years=eq_horizon,
-    )
-
-    years_axis = [b["year"] for b in buildup_conservative]
-    eq_conservative_vals = [b["equity"] for b in buildup_conservative]
-    eq_appreciated_vals = [b["equity"] for b in buildup_appreciated]
-
-    eq_fig = go.Figure()
-    eq_fig.add_trace(
-        go.Scatter(
-            x=years_axis,
-            y=eq_appreciated_vals,
-            mode="lines",
-            line={"color": "#1b5e20", "width": 3, "dash": "dash"},
-            name=f"Mit {appr_pct:.2f} % Wertsteigerung".replace(".", ","),
-            hovertemplate="Jahr %{x}<br>EK: € %{y:,.0f}<extra></extra>",
-        )
-    )
-    eq_fig.add_trace(
-        go.Scatter(
-            x=years_axis,
-            y=eq_conservative_vals,
-            mode="lines",
-            line={"color": "#1976d2", "width": 3},
-            name="Nur Tilgung (konservativ)",
-            hovertemplate="Jahr %{x}<br>EK: € %{y:,.0f}<extra></extra>",
-        )
-    )
-    eq_fig.add_hline(
-        y=eq_eingesetzt,
-        line_dash="dot",
-        line_color="#666",
-        annotation_text=f"EK eingesetzt: {euro(eq_eingesetzt)}",
-        annotation_position="bottom right",
-    )
-    eq_fig.update_layout(
-        xaxis_title="Jahre seit Kauf",
-        yaxis_title="Eigenkapital (€)",
-        height=420,
-        margin=dict(t=20, b=40, l=20, r=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    st.plotly_chart(eq_fig, use_container_width=True)
-
-    y0_eq = buildup_conservative[0]["equity"]
-    knk_drop = eq_eingesetzt - y0_eq
-    st.caption(
-        f"Am Kauftag: € {eq_eingesetzt:,.0f} bezahlt, davon {euro(knk_drop)} Kaufnebenkosten "
-        f"sofort versunken. Tatsächlicher EK-Wert in der Wohnung am Tag 1: {euro(y0_eq)}. "
-        f"Konservativ (nur Tilgung) braucht es Jahre, diesen Verlust auszugleichen. Mit "
-        f"{appr_pct:.2f} %".replace(".", ",")
-        + " Wertsteigerung p.a. geht das schneller."
-    )
 
     st.divider()
     st.subheader("Renditezerlegung")

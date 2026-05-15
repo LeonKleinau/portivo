@@ -8,6 +8,11 @@ PORTFOLIO = [
         "kaltmiete_monthly": 910,
         "opex_monthly_total": 180,
         "wohnflaeche_sqm": 65,
+        "baujahr": 1900,
+        "heizungsart": "Gas-Zentralheizung",
+        "heizung_installation_year": 2008,
+        "energieausweis_date": "2019-05-15",
+        "mietspiegel_eur_per_sqm": 16.00,
     },
     {
         "property_id": "BER-002",
@@ -18,6 +23,11 @@ PORTFOLIO = [
         "kaltmiete_monthly": 625,
         "opex_monthly_total": 140,
         "wohnflaeche_sqm": 48,
+        "baujahr": 1910,
+        "heizungsart": "Gas-Zentralheizung",
+        "heizung_installation_year": 2015,
+        "energieausweis_date": "2020-02-15",
+        "mietspiegel_eur_per_sqm": 13.50,
     },
     {
         "property_id": "BER-003",
@@ -28,6 +38,11 @@ PORTFOLIO = [
         "kaltmiete_monthly": 1_310,
         "opex_monthly_total": 220,
         "wohnflaeche_sqm": 82,
+        "baujahr": 1995,
+        "heizungsart": "Fernwärme",
+        "heizung_installation_year": 2002,
+        "energieausweis_date": "2017-10-01",
+        "mietspiegel_eur_per_sqm": 17.00,
     },
     {
         "property_id": "BER-004",
@@ -38,6 +53,11 @@ PORTFOLIO = [
         "kaltmiete_monthly": 660,
         "opex_monthly_total": 150,
         "wohnflaeche_sqm": 55,
+        "baujahr": 1965,
+        "heizungsart": "Gas-Etagenheizung",
+        "heizung_installation_year": 2018,
+        "energieausweis_date": "2022-08-01",
+        "mietspiegel_eur_per_sqm": 12.50,
     },
 ]
 
