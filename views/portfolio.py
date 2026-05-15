@@ -132,7 +132,7 @@ for p in resolved:
     chart_opex.append(monthly_opex)
     chart_annuity.append(monthly_annuity)
 
-bar_colors = ["#2e7d32" if v >= 0 else "#c62828" for v in chart_net]
+bar_colors = ["#00d09c" if v >= 0 else "#ff5252" for v in chart_net]
 bar_text = [euro(v) for v in chart_net]
 customdata = list(zip(chart_rents, chart_opex, chart_annuity))
 
@@ -160,8 +160,12 @@ fig.update_layout(
     height=400,
     margin=dict(t=50, b=40, l=20, r=20),
     showlegend=False,
+    template="plotly_dark",
+    paper_bgcolor="#0d1117",
+    plot_bgcolor="#0d1117",
+    font=dict(color="#e6edf3"),
 )
-fig.add_hline(y=0, line_color="#666", line_width=1)
+fig.add_hline(y=0, line_color="#30363d", line_width=1)
 st.plotly_chart(fig, use_container_width=True)
 st.caption(
     "Grün = positiver Cashflow, rot = negativer Cashflow. Hover für die Aufschlüsselung in Kaltmiete, Bewirtschaftung und Annuität."

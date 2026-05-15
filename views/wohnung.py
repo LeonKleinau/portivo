@@ -56,9 +56,9 @@ def _render_analytics(p, loan, total_acq):
                 "",
             ],
             textposition="outside",
-            connector={"line": {"color": "rgb(63, 63, 63)"}},
-            increasing={"marker": {"color": "#4caf50"}},
-            decreasing={"marker": {"color": "#f44336"}},
+            connector={"line": {"color": "#30363d"}},
+            increasing={"marker": {"color": "#00d09c"}},
+            decreasing={"marker": {"color": "#ff5252"}},
             totals={"marker": {"color": cashflow_total_color}},
         )
     )
@@ -67,6 +67,10 @@ def _render_analytics(p, loan, total_acq):
         height=400,
         margin=dict(t=20, b=40, l=20, r=20),
         showlegend=False,
+        template="plotly_dark",
+        paper_bgcolor="#0d1117",
+        plot_bgcolor="#0d1117",
+        font=dict(color="#e6edf3"),
     )
     st.plotly_chart(wf, use_container_width=True)
 
@@ -121,6 +125,10 @@ def _render_analytics(p, loan, total_acq):
             height=400,
             margin=dict(t=20, b=40, l=20, r=20),
             showlegend=False,
+            template="plotly_dark",
+            paper_bgcolor="#0d1117",
+            plot_bgcolor="#0d1117",
+            font=dict(color="#e6edf3"),
         )
         st.plotly_chart(amort, use_container_width=True)
 
@@ -174,9 +182,9 @@ def _render_analytics(p, loan, total_acq):
                 "",
             ],
             textposition="outside",
-            connector={"line": {"color": "rgb(63, 63, 63)"}},
-            increasing={"marker": {"color": "#4caf50"}},
-            decreasing={"marker": {"color": "#f44336"}},
+            connector={"line": {"color": "#30363d"}},
+            increasing={"marker": {"color": "#00d09c"}},
+            decreasing={"marker": {"color": "#ff5252"}},
             totals={"marker": {"color": decomp_total_color}},
         )
     )
@@ -185,6 +193,10 @@ def _render_analytics(p, loan, total_acq):
         height=400,
         margin=dict(t=20, b=40, l=20, r=20),
         showlegend=False,
+        template="plotly_dark",
+        paper_bgcolor="#0d1117",
+        plot_bgcolor="#0d1117",
+        font=dict(color="#e6edf3"),
     )
     st.plotly_chart(rd, use_container_width=True)
     st.caption(
