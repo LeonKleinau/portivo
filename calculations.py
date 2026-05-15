@@ -69,6 +69,149 @@ def equity_buildup(
     return out
 
 
+def irr(cashflows, tol=1e-7, max_iter=200):
+    if not cashflows or len(cashflows) < 2:
+        return None
+    has_pos = any(cf > 0 for cf in cashflows)
+    has_neg = any(cf < 0 for cf in cashflows)
+    if not (has_pos and has_neg):
+        return None
+
+    def npv(rate):
+        return sum(cf / (1 + rate) ** t for t, cf in enumerate(cashflows))
+
+    low, high = -0.99, 10.0
+    f_low = npv(low)
+    f_high = npv(high)
+    if f_low * f_high > 0:
+        return None
+
+    for _ in range(max_iter):
+        mid = (low + high) / 2
+        f_mid = npv(mid)
+        if abs(f_mid) < tol or (high - low) / 2 < tol:
+            return mid
+        if f_low * f_mid < 0:
+            high = mid
+            f_high = f_mid
+        else:
+            low = mid
+            f_low = f_mid
+    return (low + high) / 2
+
+
+def scenario_projection(
+    prop,
+    loan,
+    holding_years,
+    today,
+    annual_appreciation_pct=2.0,
+    annual_rent_growth_pct=1.5,
+    annual_opex_growth_pct=2.0,
+    anschluss_rate_pct=3.8,
+    selling_costs_pct=5.0,
+):
+    from datetime import date as _date
+
+    if today is None:
+        today = _date.today()
+    purchase_d = _date.fromisoformat(prop["purchase_date"])
+
+    current_value = float(prop["purchase_price"])
+    rest_t0 = current_restschuld(loan, prop["purchase_date"], today) if loan else 0
+    equity_t0 = current_value - rest_t0
+
+    if loan:
+        zb_d = _date.fromisoformat(loan["zinsbindung_end"])
+        years_to_zb_end = max(0.0, (zb_d - today).days / 365.25)
+        original_annuity = (
+            loan["darlehenssumme"]
+            * (loan["zinssatz_pct"] + loan["tilgung_anfang_pct"])
+            / 100
+        )
+        original_rate = loan["zinssatz_pct"]
+        tilgung_pct = loan["tilgung_anfang_pct"]
+    else:
+        years_to_zb_end = 0.0
+        original_annuity = 0
+        original_rate = 0
+        tilgung_pct = 0
+
+    rest = rest_t0
+    rent_y1 = prop["kaltmiete_monthly"] * 12
+    opex_y1 = prop["opex_monthly_total"] * 12
+
+    yearly = []
+    anschluss_annuity = None
+
+    for year in range(1, int(holding_years) + 1):
+        rent = rent_y1 * ((1 + annual_rent_growth_pct / 100) ** (year - 1))
+        opex = opex_y1 * ((1 + annual_opex_growth_pct / 100) ** (year - 1))
+
+        if loan and rest > 0:
+            if year <= years_to_zb_end + 0.5:
+                annuity_this_year = original_annuity
+                interest = rest * original_rate / 100
+            else:
+                if anschluss_annuity is None:
+                    anschluss_annuity = (
+                        rest * (anschluss_rate_pct + tilgung_pct) / 100
+                    )
+                annuity_this_year = anschluss_annuity
+                interest = rest * anschluss_rate_pct / 100
+
+            principal = annuity_this_year - interest
+            if principal > rest:
+                principal = rest
+                annuity_this_year = interest + principal
+
+            debt_service = annuity_this_year
+            rest = max(0.0, rest - principal)
+        else:
+            interest = 0
+            principal = 0
+            debt_service = 0
+
+        net_cf = rent - opex - debt_service
+        yearly.append(
+            {
+                "year": year,
+                "rent": rent,
+                "opex": opex,
+                "interest": interest,
+                "principal_paydown": principal,
+                "debt_service": debt_service,
+                "net_cashflow": net_cf,
+                "rest_end": rest,
+            }
+        )
+
+    exit_price = current_value * ((1 + annual_appreciation_pct / 100) ** holding_years)
+    selling_costs = exit_price * selling_costs_pct / 100
+    rest_at_exit = rest
+    equity_at_exit = exit_price - rest_at_exit - selling_costs
+
+    cashflows = [-equity_t0]
+    for i, y in enumerate(yearly):
+        cf = y["net_cashflow"]
+        if i == len(yearly) - 1:
+            cf += equity_at_exit
+        cashflows.append(cf)
+
+    return {
+        "equity_t0": equity_t0,
+        "current_value_t0": current_value,
+        "rest_t0": rest_t0,
+        "yearly": yearly,
+        "exit_price": exit_price,
+        "selling_costs": selling_costs,
+        "rest_at_exit": rest_at_exit,
+        "equity_at_exit": equity_at_exit,
+        "irr_cashflows": cashflows,
+        "cumulative_cashflow": sum(y["net_cashflow"] for y in yearly),
+    }
+
+
 def tax_summary(prop, loan, year, land_share_pct=20.0):
     if not prop.get("purchase_date"):
         return None

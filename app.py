@@ -80,7 +80,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-pages = [st.Page("views/portfolio.py", title="Portfolio", default=True)]
+pages = [
+    st.Page("views/portfolio.py", title="Portfolio", default=True),
+    st.Page("views/szenario.py", title="Szenario"),
+]
 
 selected_id = st.session_state.get("selected_property_id") or st.query_params.get(
     "property_id"

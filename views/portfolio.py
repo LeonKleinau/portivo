@@ -55,6 +55,21 @@ row2[2].metric("Cash-on-Cash (Ø)", percent(portfolio_coc))
 
 st.divider()
 
+with st.container(border=True):
+    if st.button(
+        "🧮  Szenario-Rechner — IRR, Exit-Preis, Was-wäre-wenn",
+        key="open_szenario",
+        type="tertiary",
+        use_container_width=True,
+    ):
+        st.switch_page("views/szenario.py")
+    st.caption(
+        "Spiele mit Haltedauer, Wertsteigerung und Anschlusszins für eine oder "
+        "alle Wohnungen. Berechnet IRR und Exit-Eigenkapital wie ein Analyst-Report."
+    )
+
+st.divider()
+
 st.subheader("Wohnungen")
 st.caption("Klicke auf eine Adresse, um zur Detailansicht zu wechseln.")
 

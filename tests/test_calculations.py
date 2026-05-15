@@ -11,9 +11,11 @@ from calculations import (
     equity_buildup,
     gesamtrendite_components,
     gross_yield,
+    irr,
     net_yield,
     projected_restschuld,
     restschuld_is_projection,
+    scenario_projection,
     tax_summary,
     true_total_return,
 )
@@ -367,6 +369,132 @@ def test_ber001_amortisation_year_one_matches_excel():
     assert y1["principal"] == pytest.approx(6_720)
     assert y1["annuity"] == pytest.approx(11_760)
     assert y1["closing_balance"] == pytest.approx(329_280)
+
+
+# --- irr ---
+
+
+def test_irr_simple_5_pct():
+    # -100 today, +105 in one year → IRR = 5 %
+    val = irr([-100, 105])
+    assert val == pytest.approx(0.05, abs=1e-4)
+
+
+def test_irr_zero_when_break_even():
+    # -100 today, +100 in one year → IRR = 0 %
+    val = irr([-100, 100])
+    assert val == pytest.approx(0.0, abs=1e-4)
+
+
+def test_irr_negative_when_loss():
+    val = irr([-100, 80])
+    assert val == pytest.approx(-0.2, abs=1e-4)
+
+
+def test_irr_multi_period():
+    # -1000 today, +200/year for 6 years; IRR ~ 5.47 %
+    cashflows = [-1000, 200, 200, 200, 200, 200, 200]
+    val = irr(cashflows)
+    assert val is not None
+    assert 0.054 < val < 0.056
+
+
+def test_irr_returns_none_when_no_sign_change():
+    assert irr([-100, -50, -10]) is None
+    assert irr([100, 50, 10]) is None
+
+
+def test_irr_returns_none_for_empty():
+    assert irr([]) is None
+    assert irr([100]) is None
+
+
+# --- scenario_projection ---
+
+
+def test_scenario_projection_basic_no_loan():
+    prop = {
+        "purchase_price": 200_000,
+        "purchase_date": "2024-01-01",
+        "kaltmiete_monthly": 800,
+        "opex_monthly_total": 100,
+        "kaufnebenkosten_total": 20_000,
+    }
+    proj = scenario_projection(
+        prop,
+        loan=None,
+        holding_years=10,
+        today=date(2026, 1, 1),
+        annual_appreciation_pct=2.0,
+        annual_rent_growth_pct=0.0,
+        annual_opex_growth_pct=0.0,
+        anschluss_rate_pct=3.8,
+        selling_costs_pct=5.0,
+    )
+    # No loan → equity_t0 = purchase_price (full ownership)
+    assert proj["equity_t0"] == pytest.approx(200_000)
+    assert len(proj["yearly"]) == 10
+    # Exit price = 200k × 1.02^10
+    assert proj["exit_price"] == pytest.approx(200_000 * (1.02 ** 10), abs=1)
+
+
+def test_scenario_projection_with_loan_uses_anschluss_rate_after_zinsbindung():
+    prop = {
+        "purchase_price": 400_000,
+        "purchase_date": "2020-01-01",
+        "kaltmiete_monthly": 1200,
+        "opex_monthly_total": 200,
+        "kaufnebenkosten_total": 40_000,
+    }
+    loan = {
+        "darlehenssumme": 300_000,
+        "zinssatz_pct": 1.5,
+        "tilgung_anfang_pct": 2.0,
+        "zinsbindung_end": "2030-01-01",
+    }
+    # today 2026, Zinsbindung-Ende 2030 (~4 years). Holding 10y → years 1-4 at 1.5%, 5-10 at 5.0%
+    proj = scenario_projection(
+        prop,
+        loan=loan,
+        holding_years=10,
+        today=date(2026, 1, 1),
+        annual_appreciation_pct=0.0,
+        annual_rent_growth_pct=0.0,
+        annual_opex_growth_pct=0.0,
+        anschluss_rate_pct=5.0,
+        selling_costs_pct=5.0,
+    )
+    # Year 1 interest should be ~ current_rest × 1.5%
+    year1 = proj["yearly"][0]
+    assert year1["interest"] / proj["rest_t0"] == pytest.approx(0.015, abs=1e-3)
+    # Year 10 (post-Zinsbindung) interest rate should reflect 5%
+    year10 = proj["yearly"][9]
+    if year10["rest_end"] > 0 and year10["rest_end"] < proj["rest_t0"]:
+        # interest_y10 / opening_y10_balance ≈ 5%
+        opening_y10 = proj["yearly"][8]["rest_end"]
+        if opening_y10 > 0:
+            assert year10["interest"] / opening_y10 == pytest.approx(0.05, abs=1e-3)
+
+
+def test_scenario_projection_irr_cashflows_have_initial_outflow_and_exit_inflow():
+    prop = {
+        "purchase_price": 200_000,
+        "purchase_date": "2024-01-01",
+        "kaltmiete_monthly": 1000,
+        "opex_monthly_total": 100,
+        "kaufnebenkosten_total": 20_000,
+    }
+    proj = scenario_projection(
+        prop,
+        loan=None,
+        holding_years=5,
+        today=date(2026, 1, 1),
+        annual_appreciation_pct=3.0,
+    )
+    cf = proj["irr_cashflows"]
+    assert len(cf) == 6  # year 0 + 5 years
+    assert cf[0] < 0  # initial outflow
+    assert cf[-1] > cf[1]  # exit year has additional equity inflow
 
 
 # --- tax_summary ---
