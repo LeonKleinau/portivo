@@ -8,6 +8,7 @@ from calculations import (
     breakeven_rate_pct,
     cash_on_cash,
     cashflow_at_new_rate,
+    current_restschuld,
     gesamtrendite_components,
     gross_yield,
     net_yield,
@@ -294,10 +295,6 @@ if edit_mode:
                 value=format_german_number(loan_default.get("tilgung_anfang_pct", 2.0), 2),
                 help="z.B. 2,00",
             )
-            new_restschuld_str = st.text_input(
-                "Restschuld aktuell (€)",
-                value=format_german_number(loan_default.get("restschuld_current", 0)),
-            )
 
         st.divider()
         save_col, cancel_col = st.columns(2)
@@ -325,7 +322,6 @@ if edit_mode:
         darlehen = parse_or_error(new_darlehen_str, "Darlehenssumme")
         zins = parse_or_error(new_zins_str, "Zinssatz")
         tilgung = parse_or_error(new_tilgung_str, "Tilgung")
-        restschuld = parse_or_error(new_restschuld_str, "Restschuld")
 
         if errors:
             for e in errors:
@@ -359,7 +355,6 @@ if edit_mode:
                         "zinssatz_pct": float(zins),
                         "zinsbindung_end": new_zinsbindung.strftime("%Y-%m-%d"),
                         "tilgung_anfang_pct": float(tilgung),
-                        "restschuld_current": int(round(restschuld)),
                     },
                 )
             st.session_state[edit_mode_key] = False
@@ -451,7 +446,8 @@ else:
             st.write(f"**Zinssatz:** {percent(loan['zinssatz_pct'])}")
             st.write(f"**Tilgung (anfänglich):** {percent(loan['tilgung_anfang_pct'])}")
             st.write(f"**Zinsbindung bis:** {german_date(loan['zinsbindung_end'])}")
-            st.write(f"**Restschuld aktuell:** {euro(loan['restschuld_current'])}")
+            current_rest = current_restschuld(loan, p["purchase_date"])
+            st.write(f"**Restschuld aktuell:** {euro(current_rest)}")
             st.write(f"**Eigenkapital eingesetzt:** {euro(eigenkapital)}")
             st.write(
                 f"**Cash-on-Cash:** {percent(cash_on_cash(annual_rent, annual_opex, annual_debt, eigenkapital))}"

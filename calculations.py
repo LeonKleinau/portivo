@@ -142,6 +142,40 @@ def gesamtrendite_components(
     }
 
 
+def current_restschuld(loan, purchase_date_iso, today=None):
+    from datetime import date as _date
+
+    if not loan or not loan.get("darlehenssumme"):
+        return 0
+    today = today or _date.today()
+    purchase = _date.fromisoformat(purchase_date_iso)
+    days_elapsed = max(0, (today - purchase).days)
+    years_elapsed = days_elapsed / 365.25
+
+    schedule = amortisation_schedule(
+        loan["darlehenssumme"],
+        loan["zinssatz_pct"],
+        loan["tilgung_anfang_pct"],
+        years=50,
+    )
+    if not schedule:
+        return loan["darlehenssumme"]
+
+    full_years = int(years_elapsed)
+    fraction = years_elapsed - full_years
+
+    if full_years == 0:
+        opening = loan["darlehenssumme"]
+        closing = schedule[0]["closing_balance"]
+    elif full_years >= len(schedule):
+        return 0
+    else:
+        opening = schedule[full_years - 1]["closing_balance"]
+        closing = schedule[full_years]["closing_balance"]
+
+    return max(0, opening - fraction * (opening - closing))
+
+
 def cashflow_at_new_rate(
     rent_monthly, opex_monthly, restschuld, new_rate_pct, tilgung_pct
 ):

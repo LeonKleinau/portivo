@@ -94,5 +94,5 @@ if selected_id:
 else:
     pages.append(st.Page("views/wohnung.py", title="Wohnung"))
 
-nav = st.navigation(pages)
+nav = st.navigation(pages, position="hidden")
 nav.run()

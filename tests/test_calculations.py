@@ -1,10 +1,13 @@
 import pytest
 
+from datetime import date
+
 from calculations import (
     amortisation_schedule,
     breakeven_rate_pct,
     cash_on_cash,
     cashflow_at_new_rate,
+    current_restschuld,
     equity_buildup,
     gesamtrendite_components,
     gross_yield,
@@ -167,6 +170,57 @@ def test_ber001_true_total_return_matches_excel():
         holding_period_years=10,
     )
     assert ttr == pytest.approx(-480 / 126_000 * 100, abs=1e-6)
+
+
+# --- current_restschuld ---
+
+
+def test_current_restschuld_at_purchase_returns_darlehenssumme():
+    loan = {"darlehenssumme": 100_000, "zinssatz_pct": 2.0, "tilgung_anfang_pct": 2.0}
+    assert current_restschuld(
+        loan, "2026-05-15", today=date(2026, 5, 15)
+    ) == 100_000
+
+
+def test_current_restschuld_after_full_year_matches_schedule_end():
+    loan = {"darlehenssumme": 100_000, "zinssatz_pct": 2.0, "tilgung_anfang_pct": 2.0}
+    sched = amortisation_schedule(100_000, 2.0, 2.0, years=5)
+    # 366 days = ~1.002 years to land just past full_years=1 boundary
+    val = current_restschuld(loan, "2025-05-15", today=date(2026, 5, 16))
+    assert val == pytest.approx(sched[0]["closing_balance"], abs=100)
+
+
+def test_current_restschuld_interpolates_within_year():
+    loan = {"darlehenssumme": 100_000, "zinssatz_pct": 2.0, "tilgung_anfang_pct": 2.0}
+    sched = amortisation_schedule(100_000, 2.0, 2.0, years=5)
+    # ~6 months elapsed
+    val = current_restschuld(loan, "2025-11-15", today=date(2026, 5, 15))
+    midpoint = 100_000 - 0.5 * (100_000 - sched[0]["closing_balance"])
+    assert abs(val - midpoint) < 300
+
+
+def test_current_restschuld_zero_for_no_loan():
+    assert current_restschuld(None, "2020-01-01") == 0
+
+
+def test_current_restschuld_zero_beyond_full_amortisation():
+    loan = {"darlehenssumme": 100_000, "zinssatz_pct": 2.0, "tilgung_anfang_pct": 2.0}
+    # 60 years past purchase — well past full amort
+    val = current_restschuld(loan, "1970-01-01", today=date(2030, 1, 1))
+    assert val == 0
+
+
+# BER-001 reconciliation:
+#   purchase 2019-06-15, today 2026-05-15 → 2526 days ≈ 6.916 years
+#   schedule[5] closing ≈ 294,137 (year 6 end)
+#   schedule[6] closing ≈ 286,789 (year 7 end)
+#   current ≈ 294,137 - 0.916 × (294,137 - 286,789) ≈ 287,406
+
+
+def test_ber001_current_restschuld_matches_excel():
+    loan = {"darlehenssumme": 336_000, "zinssatz_pct": 1.5, "tilgung_anfang_pct": 2.0}
+    val = current_restschuld(loan, "2019-06-15", today=date(2026, 5, 15))
+    assert 287_000 < val < 288_000
 
 
 # --- cashflow_at_new_rate ---
