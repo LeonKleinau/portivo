@@ -69,6 +69,55 @@ def equity_buildup(
     return out
 
 
+def tax_summary(prop, loan, year, land_share_pct=20.0):
+    if not prop.get("purchase_date"):
+        return None
+    from datetime import date as _date
+
+    purchase = _date.fromisoformat(prop["purchase_date"])
+    if year < purchase.year:
+        return None
+
+    mieteinnahmen = prop["kaltmiete_monthly"] * 12
+    bewirtschaftungskosten = prop["opex_monthly_total"] * 12
+
+    schuldzinsen = 0.0
+    if loan:
+        loan_year = year - purchase.year + 1
+        schedule = amortisation_schedule(
+            loan["darlehenssumme"],
+            loan["zinssatz_pct"],
+            loan["tilgung_anfang_pct"],
+            years=50,
+        )
+        if 1 <= loan_year <= len(schedule):
+            schuldzinsen = schedule[loan_year - 1]["interest"]
+
+    baujahr = prop.get("baujahr", 0) or 0
+    afa_rate = 3.0 if baujahr >= 2023 else 2.0
+    building_basis = (prop["purchase_price"] + prop["kaufnebenkosten_total"]) * (
+        1 - land_share_pct / 100
+    )
+    afa_gebaeude = building_basis * afa_rate / 100
+
+    summe_werbungskosten = schuldzinsen + bewirtschaftungskosten + afa_gebaeude
+    ueberschuss = mieteinnahmen - summe_werbungskosten
+
+    return {
+        "property_id": prop["property_id"],
+        "address": prop["address"],
+        "year": year,
+        "mieteinnahmen": mieteinnahmen,
+        "schuldzinsen": schuldzinsen,
+        "bewirtschaftungskosten": bewirtschaftungskosten,
+        "afa_gebaeude": afa_gebaeude,
+        "afa_rate_pct": afa_rate,
+        "building_basis": building_basis,
+        "summe_werbungskosten": summe_werbungskosten,
+        "ueberschuss_verlust": ueberschuss,
+    }
+
+
 def gesamtrendite_components(
     annual_rent,
     annual_opex,

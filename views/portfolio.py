@@ -1,7 +1,9 @@
+from datetime import date
+
 import plotly.graph_objects as go
 import streamlit as st
 
-from calculations import cash_on_cash, gross_yield, net_yield
+from calculations import cash_on_cash, gross_yield, net_yield, tax_summary
 from engagement import all_alerts
 from seed_portfolio import PORTFOLIO
 from utils import euro, german_date, get_loan, get_property, percent
@@ -210,3 +212,101 @@ for p in resolved:
                 st.write(f"**{loan['bank']}**")
             else:
                 st.write("⚠️ **Daten fehlen**")
+
+
+st.divider()
+st.subheader("Steuerberater-Export")
+st.caption(
+    "Anlage-V-Daten als CSV für deinen Steuerberater. Pro Objekt und Jahr: "
+    "Mieteinnahmen, Schuldzinsen, Bewirtschaftungskosten und AfA Gebäude — direkt importfähig in Excel oder DATEV."
+)
+
+current_year = date.today().year
+year_options = list(range(current_year, current_year - 9, -1))
+selected_year = st.selectbox(
+    "Steuerjahr",
+    year_options,
+    index=1 if len(year_options) > 1 else 0,
+    key="tax_year_selector",
+)
+
+tax_rows = []
+for p in resolved:
+    loan_for_tax = get_loan(p["property_id"])
+    s = tax_summary(p, loan_for_tax, year=selected_year)
+    if s:
+        tax_rows.append(s)
+
+if not tax_rows:
+    st.info(
+        f"Keine Objekte im Steuerjahr {selected_year} verfügbar — alle wurden später erworben."
+    )
+else:
+    preview = []
+    for s in tax_rows:
+        preview.append(
+            {
+                "Objekt": s["address"].split(",")[0],
+                "Mieteinnahmen": euro(s["mieteinnahmen"]),
+                "Schuldzinsen": euro(s["schuldzinsen"]),
+                "Bewirtschaftung": euro(s["bewirtschaftungskosten"]),
+                "AfA Gebäude": euro(s["afa_gebaeude"]),
+                "Σ Werbungskosten": euro(s["summe_werbungskosten"]),
+                "Überschuss/Verlust": euro(s["ueberschuss_verlust"]),
+            }
+        )
+    st.dataframe(preview, use_container_width=True, hide_index=True)
+
+    total_einnahmen = sum(s["mieteinnahmen"] for s in tax_rows)
+    total_werbungskosten = sum(s["summe_werbungskosten"] for s in tax_rows)
+    total_ueberschuss = total_einnahmen - total_werbungskosten
+    color = "#1b5e20" if total_ueberschuss >= 0 else "#8b0000"
+    st.markdown(
+        f"**Portfolio gesamt {selected_year}**: "
+        f"Mieteinnahmen {euro(total_einnahmen)} − "
+        f"Werbungskosten {euro(total_werbungskosten)} = "
+        f"<span style='color: {color}; font-weight: bold;'>{euro(total_ueberschuss)}</span> "
+        f"Überschuss / Verlust",
+        unsafe_allow_html=True,
+    )
+
+    def _fmt_de(value):
+        return f"{value:.2f}".replace(".", ",")
+
+    csv_lines = [
+        "Objekt-ID;Adresse;Jahr;Mieteinnahmen (EUR);Schuldzinsen (EUR);"
+        "Bewirtschaftungskosten (EUR);AfA-Satz (%);AfA Gebaeude (EUR);"
+        "Summe Werbungskosten (EUR);Ueberschuss/Verlust (EUR)"
+    ]
+    for s in tax_rows:
+        csv_lines.append(
+            ";".join(
+                [
+                    s["property_id"],
+                    s["address"],
+                    str(s["year"]),
+                    _fmt_de(s["mieteinnahmen"]),
+                    _fmt_de(s["schuldzinsen"]),
+                    _fmt_de(s["bewirtschaftungskosten"]),
+                    _fmt_de(s["afa_rate_pct"]),
+                    _fmt_de(s["afa_gebaeude"]),
+                    _fmt_de(s["summe_werbungskosten"]),
+                    _fmt_de(s["ueberschuss_verlust"]),
+                ]
+            )
+        )
+    csv_text = "\n".join(csv_lines)
+
+    st.download_button(
+        label=f"📥 Anlage-V-Daten {selected_year} als CSV herunterladen",
+        data=("﻿" + csv_text).encode("utf-8"),
+        file_name=f"portivo_anlage_v_{selected_year}.csv",
+        mime="text/csv",
+    )
+
+    st.caption(
+        "Vereinfachungen: AfA-Basis = 80 % des Gesamterwerbskosten (Gebäudeanteil), "
+        "AfA-Satz 2 % (Bj. < 2023) bzw. 3 % (Bj. ≥ 2023), Bewirtschaftungskosten als "
+        "Lump-Sum. Bei abweichendem Bodenrichtwert-Anteil oder Sondersituationen "
+        "manuell verfeinern. **Keine Steuerberatung — bitte mit deinem Steuerberater abstimmen.**"
+    )

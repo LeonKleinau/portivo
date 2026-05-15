@@ -9,6 +9,7 @@ from calculations import (
     gesamtrendite_components,
     gross_yield,
     net_yield,
+    tax_summary,
     true_total_return,
 )
 
@@ -281,6 +282,85 @@ def test_ber001_amortisation_year_one_matches_excel():
     assert y1["principal"] == pytest.approx(6_720)
     assert y1["annuity"] == pytest.approx(11_760)
     assert y1["closing_balance"] == pytest.approx(329_280)
+
+
+# --- tax_summary ---
+
+
+BER001 = {
+    "property_id": "BER-001",
+    "address": "Schönhauser Allee 12, 10437 Berlin",
+    "purchase_price": 420_000,
+    "kaufnebenkosten_total": 42_000,
+    "purchase_date": "2019-06-15",
+    "kaltmiete_monthly": 910,
+    "opex_monthly_total": 180,
+    "wohnflaeche_sqm": 65,
+    "baujahr": 1900,
+}
+
+BER001_LOAN = {
+    "darlehenssumme": 336_000,
+    "zinssatz_pct": 1.5,
+    "tilgung_anfang_pct": 2.0,
+}
+
+
+def test_tax_summary_returns_none_before_purchase_year():
+    assert tax_summary(BER001, BER001_LOAN, year=2018) is None
+
+
+def test_tax_summary_uses_2pct_afa_for_altbau():
+    s = tax_summary(BER001, BER001_LOAN, year=2025)
+    assert s["afa_rate_pct"] == 2.0
+
+
+def test_tax_summary_uses_3pct_afa_for_neubau_post_2023():
+    prop = dict(BER001, baujahr=2024)
+    s = tax_summary(prop, None, year=2025)
+    assert s["afa_rate_pct"] == 3.0
+
+
+def test_tax_summary_afa_basis_uses_80_pct_of_total_acq():
+    # purchase 420k + KNK 42k = 462k total. 80% building share = 369,600.
+    s = tax_summary(BER001, BER001_LOAN, year=2025)
+    assert s["building_basis"] == pytest.approx(369_600)
+    assert s["afa_gebaeude"] == pytest.approx(369_600 * 0.02)
+
+
+def test_tax_summary_mieteinnahmen_is_annual_kaltmiete():
+    s = tax_summary(BER001, BER001_LOAN, year=2025)
+    assert s["mieteinnahmen"] == 910 * 12
+
+
+def test_tax_summary_no_schuldzinsen_without_loan():
+    s = tax_summary(BER001, None, year=2025)
+    assert s["schuldzinsen"] == 0
+
+
+def test_tax_summary_schuldzinsen_decreases_year_over_year():
+    s_2020 = tax_summary(BER001, BER001_LOAN, year=2020)
+    s_2025 = tax_summary(BER001, BER001_LOAN, year=2025)
+    assert s_2020["schuldzinsen"] > s_2025["schuldzinsen"]
+
+
+# Excel reconciliation: BER-001 tax year 2019 (= loan year 1)
+#   Mieteinnahmen = 10,920
+#   Schuldzinsen Jahr 1 = 5,040
+#   Bewirtschaftung = 2,160
+#   AfA Gebäude = (420k + 42k) × 0.80 × 2 % = 369,600 × 0.02 = 7,392
+#   Σ Werbungskosten = 14,592
+#   Verlust = 10,920 - 14,592 = -3,672
+
+
+def test_ber001_tax_summary_2019_matches_excel():
+    s = tax_summary(BER001, BER001_LOAN, year=2019)
+    assert s["mieteinnahmen"] == pytest.approx(10_920)
+    assert s["schuldzinsen"] == pytest.approx(5_040)
+    assert s["bewirtschaftungskosten"] == pytest.approx(2_160)
+    assert s["afa_gebaeude"] == pytest.approx(7_392)
+    assert s["summe_werbungskosten"] == pytest.approx(14_592)
+    assert s["ueberschuss_verlust"] == pytest.approx(-3_672)
 
 
 # --- gesamtrendite_components ---
