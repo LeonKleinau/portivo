@@ -72,16 +72,6 @@ LOANS = [
         "tilgung_anfang_pct": 2.0,
         "restschuld_current": 360_000,
     },
-    {
-        "loan_id": "LOAN-BER-004",
-        "property_id": "BER-004",
-        "bank": "Commerzbank",
-        "darlehenssumme": 198_400,
-        "zinssatz_pct": 3.5,
-        "zinsbindung_end": "2032-09-08",
-        "tilgung_anfang_pct": 2.0,
-        "restschuld_current": 190_000,
-    },
 ]
 
 LOANS_BY_PROPERTY_ID = {loan["property_id"]: loan for loan in LOANS}

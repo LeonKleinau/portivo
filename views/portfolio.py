@@ -1,7 +1,7 @@
 import streamlit as st
 
 from seed_portfolio import PORTFOLIO
-from utils import euro, german_date
+from utils import euro, german_date, get_loan
 
 st.title("Portivo")
 st.caption("Portfolio-Übersicht")
@@ -19,16 +19,20 @@ col3.metric("Wohnungen", n_properties)
 
 st.divider()
 
-display_rows = [
-    {
-        "Adresse": p["address"],
-        "Wohnfläche": f"{p['wohnflaeche_sqm']} m²",
-        "Kaufpreis": euro(p["purchase_price"]),
-        "Kaltmiete (mtl.)": euro(p["kaltmiete_monthly"]),
-        "Kaufdatum": german_date(p["purchase_date"]),
-    }
-    for p in PORTFOLIO
-]
+display_rows = []
+for p in PORTFOLIO:
+    loan = get_loan(p["property_id"])
+    finanzierung_label = loan["bank"] if loan else "⚠️ Daten fehlen"
+    display_rows.append(
+        {
+            "Adresse": p["address"],
+            "Wohnfläche": f"{p['wohnflaeche_sqm']} m²",
+            "Kaufpreis": euro(p["purchase_price"]),
+            "Kaltmiete (mtl.)": euro(p["kaltmiete_monthly"]),
+            "Kaufdatum": german_date(p["purchase_date"]),
+            "Finanzierung": finanzierung_label,
+        }
+    )
 
 st.subheader("Wohnungen")
 st.caption("Wähle eine Wohnung, um zur Detailansicht zu wechseln.")
