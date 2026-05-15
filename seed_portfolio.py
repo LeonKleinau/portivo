@@ -40,3 +40,48 @@ PORTFOLIO = [
         "wohnflaeche_sqm": 55,
     },
 ]
+
+LOANS = [
+    {
+        "loan_id": "LOAN-BER-001",
+        "property_id": "BER-001",
+        "bank": "ING-DiBa",
+        "darlehenssumme": 336_000,
+        "zinssatz_pct": 1.5,
+        "zinsbindung_end": "2029-06-15",
+        "tilgung_anfang_pct": 2.0,
+        "restschuld_current": 285_000,
+    },
+    {
+        "loan_id": "LOAN-BER-002",
+        "property_id": "BER-002",
+        "bank": "DKB",
+        "darlehenssumme": 222_400,
+        "zinssatz_pct": 1.2,
+        "zinsbindung_end": "2030-03-02",
+        "tilgung_anfang_pct": 2.5,
+        "restschuld_current": 185_000,
+    },
+    {
+        "loan_id": "LOAN-BER-003",
+        "property_id": "BER-003",
+        "bank": "HypoVereinsbank",
+        "darlehenssumme": 461_250,
+        "zinssatz_pct": 1.8,
+        "zinsbindung_end": "2027-11-20",
+        "tilgung_anfang_pct": 2.0,
+        "restschuld_current": 360_000,
+    },
+    {
+        "loan_id": "LOAN-BER-004",
+        "property_id": "BER-004",
+        "bank": "Commerzbank",
+        "darlehenssumme": 198_400,
+        "zinssatz_pct": 3.5,
+        "zinsbindung_end": "2032-09-08",
+        "tilgung_anfang_pct": 2.0,
+        "restschuld_current": 190_000,
+    },
+]
+
+LOANS_BY_PROPERTY_ID = {loan["property_id"]: loan for loan in LOANS}

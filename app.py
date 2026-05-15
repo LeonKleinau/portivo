@@ -1,6 +1,6 @@
 import streamlit as st
 
-from seed_portfolio import PORTFOLIO
+from seed_portfolio import PORTFOLIO, LOANS_BY_PROPERTY_ID
 
 st.set_page_config(page_title="Portivo", layout="wide")
 
@@ -8,6 +8,10 @@ st.set_page_config(page_title="Portivo", layout="wide")
 def euro(amount, decimals=0):
     s = f"{amount:,.{decimals}f}"
     return "€ " + s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def percent(value, decimals=2):
+    return f"{value:.{decimals}f} %".replace(".", ",")
 
 
 def german_date(iso):
@@ -57,6 +61,8 @@ selected = event.selection.rows if event and event.selection else []
 
 if selected:
     p = PORTFOLIO[selected[0]]
+    loan = LOANS_BY_PROPERTY_ID.get(p["property_id"])
+
     total_acq = p["purchase_price"] + p["kaufnebenkosten_total"]
     rent_per_sqm = p["kaltmiete_monthly"] / p["wohnflaeche_sqm"]
     price_per_sqm = p["purchase_price"] / p["wohnflaeche_sqm"]
@@ -64,7 +70,7 @@ if selected:
     st.divider()
     st.subheader(f"Details — {p['address']}")
 
-    d1, d2 = st.columns(2)
+    d1, d2, d3 = st.columns(3)
 
     with d1:
         st.markdown("**Stammdaten**")
@@ -81,5 +87,19 @@ if selected:
         st.write(f"**Gesamterwerbskosten:** {euro(total_acq)}")
         st.write(f"**Kaltmiete (mtl.):** {euro(p['kaltmiete_monthly'])}")
         st.write(f"**Bewirtschaftungskosten (mtl.):** {euro(p['opex_monthly_total'])}")
+
+    with d3:
+        st.markdown("**Finanzierung**")
+        if loan:
+            eigenkapital = total_acq - loan["darlehenssumme"]
+            st.write(f"**Bank:** {loan['bank']}")
+            st.write(f"**Darlehenssumme:** {euro(loan['darlehenssumme'])}")
+            st.write(f"**Zinssatz:** {percent(loan['zinssatz_pct'])}")
+            st.write(f"**Tilgung (anfänglich):** {percent(loan['tilgung_anfang_pct'])}")
+            st.write(f"**Zinsbindung bis:** {german_date(loan['zinsbindung_end'])}")
+            st.write(f"**Restschuld aktuell:** {euro(loan['restschuld_current'])}")
+            st.write(f"**Eigenkapital eingesetzt:** {euro(eigenkapital)}")
+        else:
+            st.write("Keine Finanzierungsdaten hinterlegt.")
 else:
     st.info("Klicke eine Zeile in der Tabelle, um Details zu sehen.")
