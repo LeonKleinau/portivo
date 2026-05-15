@@ -3,6 +3,7 @@ import pytest
 from calculations import (
     amortisation_schedule,
     cash_on_cash,
+    gesamtrendite_components,
     gross_yield,
     net_yield,
     true_total_return,
@@ -216,3 +217,56 @@ def test_ber001_amortisation_year_one_matches_excel():
     assert y1["principal"] == pytest.approx(6_720)
     assert y1["annuity"] == pytest.approx(11_760)
     assert y1["closing_balance"] == pytest.approx(329_280)
+
+
+# --- gesamtrendite_components ---
+
+
+def test_gesamtrendite_components_sums_to_true_total_return():
+    args = dict(
+        annual_rent=10_000,
+        annual_opex=2_000,
+        annual_debt_service=5_000,
+        annual_tilgung=4_000,
+        kaufnebenkosten=20_000,
+        eigenkapital=100_000,
+        holding_period_years=10,
+    )
+    parts = gesamtrendite_components(**args)
+    ttr = true_total_return(**args)
+    assert parts["total"] == pytest.approx(ttr, abs=1e-9)
+
+
+def test_gesamtrendite_components_zero_equity_safe():
+    parts = gesamtrendite_components(
+        annual_rent=10_000,
+        annual_opex=2_000,
+        annual_debt_service=5_000,
+        annual_tilgung=4_000,
+        kaufnebenkosten=20_000,
+        eigenkapital=0,
+    )
+    assert parts == {"cashflow": 0.0, "tilgung": 0.0, "knk_amort": 0.0, "total": 0.0}
+
+
+# BER-001 reconciliation:
+#   cashflow:    (-3,000) / 126,000 × 100 = -2.38095 %
+#   tilgung:     6,720    / 126,000 × 100 = +5.33333 %
+#   knk_amort:   -4,200   / 126,000 × 100 = -3.33333 %
+#   total:                                  -0.38095 %
+
+
+def test_ber001_gesamtrendite_decomposition_matches_excel():
+    parts = gesamtrendite_components(
+        annual_rent=910 * 12,
+        annual_opex=180 * 12,
+        annual_debt_service=11_760,
+        annual_tilgung=6_720,
+        kaufnebenkosten=42_000,
+        eigenkapital=126_000,
+        holding_period_years=10,
+    )
+    assert parts["cashflow"] == pytest.approx(-3_000 / 126_000 * 100, abs=1e-6)
+    assert parts["tilgung"] == pytest.approx(6_720 / 126_000 * 100, abs=1e-6)
+    assert parts["knk_amort"] == pytest.approx(-4_200 / 126_000 * 100, abs=1e-6)
+    assert parts["total"] == pytest.approx(-480 / 126_000 * 100, abs=1e-6)

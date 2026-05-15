@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from calculations import (
     amortisation_schedule,
     cash_on_cash,
+    gesamtrendite_components,
     gross_yield,
     net_yield,
     true_total_return,
@@ -272,6 +273,8 @@ else:
         monthly_interest = 0
         monthly_tilgung = 0
 
+    net_cashflow = monthly_rent - monthly_opex - monthly_interest - monthly_tilgung
+    cashflow_total_color = "#8b0000" if net_cashflow < 0 else "#1b5e20"
     wf = go.Figure(
         go.Waterfall(
             orientation="v",
@@ -289,7 +292,7 @@ else:
             connector={"line": {"color": "rgb(63, 63, 63)"}},
             increasing={"marker": {"color": "#4caf50"}},
             decreasing={"marker": {"color": "#f44336"}},
-            totals={"marker": {"color": "#1976d2"}},
+            totals={"marker": {"color": cashflow_total_color}},
         )
     )
     wf.update_layout(
@@ -359,3 +362,65 @@ else:
             f"projizierte Restschuld {euro(zb_balance)} — {percent(tilgung_pct_done)} getilgt. "
             f"Nach diesem Zeitpunkt benötigt das Darlehen eine Anschlussfinanzierung zum dann gültigen Marktzins."
         )
+
+    st.divider()
+    st.subheader("Renditezerlegung")
+
+    rent_for_decomp = p["kaltmiete_monthly"] * 12
+    opex_for_decomp = p["opex_monthly_total"] * 12
+    if loan:
+        debt_for_decomp = (
+            loan["darlehenssumme"]
+            * (loan["zinssatz_pct"] + loan["tilgung_anfang_pct"])
+            / 100
+        )
+        tilgung_for_decomp = (
+            loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100
+        )
+        ek_for_decomp = total_acq - loan["darlehenssumme"]
+    else:
+        debt_for_decomp = 0
+        tilgung_for_decomp = 0
+        ek_for_decomp = total_acq
+
+    parts = gesamtrendite_components(
+        annual_rent=rent_for_decomp,
+        annual_opex=opex_for_decomp,
+        annual_debt_service=debt_for_decomp,
+        annual_tilgung=tilgung_for_decomp,
+        kaufnebenkosten=p["kaufnebenkosten_total"],
+        eigenkapital=ek_for_decomp,
+        holding_period_years=10,
+    )
+
+    decomp_total_color = "#8b0000" if parts["total"] < 0 else "#1b5e20"
+    rd = go.Figure(
+        go.Waterfall(
+            orientation="v",
+            measure=["relative", "relative", "relative", "total"],
+            x=["Cashflow", "Tilgung", "KNK-Abschlag", "Gesamtrendite"],
+            y=[parts["cashflow"], parts["tilgung"], parts["knk_amort"], 0],
+            text=[
+                percent(parts["cashflow"]),
+                percent(parts["tilgung"]),
+                percent(parts["knk_amort"]),
+                "",
+            ],
+            textposition="outside",
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            increasing={"marker": {"color": "#4caf50"}},
+            decreasing={"marker": {"color": "#f44336"}},
+            totals={"marker": {"color": decomp_total_color}},
+        )
+    )
+    rd.update_layout(
+        yaxis_title="% p.a. auf Eigenkapital",
+        height=400,
+        margin=dict(t=20, b=40, l=20, r=20),
+        showlegend=False,
+    )
+    st.plotly_chart(rd, use_container_width=True)
+    st.caption(
+        "Cashflow + Eigenkapitalaufbau durch Tilgung − Kaufnebenkosten amortisiert (10 J.) = Gesamtrendite. "
+        "Ohne Wertsteigerung."
+    )

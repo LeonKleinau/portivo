@@ -33,6 +33,30 @@ def true_total_return(
     return ((cashflow + annual_tilgung - knk_amortised) / eigenkapital) * 100
 
 
+def gesamtrendite_components(
+    annual_rent,
+    annual_opex,
+    annual_debt_service,
+    annual_tilgung,
+    kaufnebenkosten,
+    eigenkapital,
+    holding_period_years=10,
+):
+    if eigenkapital <= 0 or holding_period_years <= 0:
+        return {"cashflow": 0.0, "tilgung": 0.0, "knk_amort": 0.0, "total": 0.0}
+    cashflow = annual_rent - annual_opex - annual_debt_service
+    knk_amortised = kaufnebenkosten / holding_period_years
+    cf_pct = cashflow / eigenkapital * 100
+    tilgung_pct = annual_tilgung / eigenkapital * 100
+    knk_pct = -knk_amortised / eigenkapital * 100
+    return {
+        "cashflow": cf_pct,
+        "tilgung": tilgung_pct,
+        "knk_amort": knk_pct,
+        "total": cf_pct + tilgung_pct + knk_pct,
+    }
+
+
 def amortisation_schedule(
     principal, annual_interest_rate_pct, initial_tilgung_pct, years=30
 ):
