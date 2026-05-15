@@ -25,6 +25,7 @@ from utils import (
     percent,
     save_user_loan,
     save_user_property,
+    stat,
 )
 
 
@@ -297,6 +298,51 @@ if edit_mode:
             )
 
         st.divider()
+        st.markdown("##### Mietvertrag")
+        mv_c1, mv_c2, mv_c3 = st.columns(3)
+        with mv_c1:
+            new_mieter = st.text_input(
+                "Mieter", value=p.get("mieter_name", "") or ""
+            )
+            new_mietbeginn = st.date_input(
+                "Mietbeginn",
+                value=(
+                    date.fromisoformat(p["mietbeginn_date"])
+                    if p.get("mietbeginn_date")
+                    else date.today()
+                ),
+            )
+        with mv_c2:
+            mietart_options = ["Unbefristet", "Indexmiete", "Staffelmiete", "Befristet"]
+            cur_mietart = p.get("mietart") or "Unbefristet"
+            if cur_mietart not in mietart_options:
+                cur_mietart = "Unbefristet"
+            new_mietart = st.selectbox(
+                "Mietart",
+                mietart_options,
+                index=mietart_options.index(cur_mietart),
+            )
+            new_letzte_erhoehung = st.date_input(
+                "Letzte Mieterhöhung",
+                value=(
+                    date.fromisoformat(p["letzte_mieterhoehung_date"])
+                    if p.get("letzte_mieterhoehung_date")
+                    else date.today()
+                ),
+            )
+        with mv_c3:
+            new_nk_str = st.text_input(
+                "NK-Vorauszahlung (mtl., €)",
+                value=format_german_number(
+                    p.get("nebenkosten_vorauszahlung_monthly", 0)
+                ),
+            )
+            new_kaution_str = st.text_input(
+                "Kaution (€)",
+                value=format_german_number(p.get("kaution_eur", 0)),
+            )
+
+        st.divider()
         save_col, cancel_col = st.columns(2)
         with save_col:
             save_clicked = st.form_submit_button("💾 Speichern", type="primary")
@@ -322,6 +368,8 @@ if edit_mode:
         darlehen = parse_or_error(new_darlehen_str, "Darlehenssumme")
         zins = parse_or_error(new_zins_str, "Zinssatz")
         tilgung = parse_or_error(new_tilgung_str, "Tilgung")
+        nk_vorauszahlung = parse_or_error(new_nk_str, "NK-Vorauszahlung")
+        kaution = parse_or_error(new_kaution_str, "Kaution")
 
         if errors:
             for e in errors:
@@ -340,6 +388,12 @@ if edit_mode:
                     "kaltmiete_monthly": int(round(kaltmiete)),
                     "opex_monthly_total": int(round(opex)),
                     "wohnflaeche_sqm": int(round(wohnflaeche)),
+                    "mieter_name": new_mieter.strip() or None,
+                    "mietbeginn_date": new_mietbeginn.strftime("%Y-%m-%d"),
+                    "mietart": new_mietart,
+                    "letzte_mieterhoehung_date": new_letzte_erhoehung.strftime("%Y-%m-%d"),
+                    "nebenkosten_vorauszahlung_monthly": int(round(nk_vorauszahlung)),
+                    "kaution_eur": int(round(kaution)),
                 },
             )
             if new_bank.strip() and darlehen and darlehen > 0:
@@ -396,40 +450,42 @@ else:
     d1, d2, d3 = st.columns(3)
 
     with d1:
-        st.markdown("**Stammdaten**")
-        st.write(f"**Adresse:** {p['address']}")
-        st.write(f"**Wohnfläche:** {p['wohnflaeche_sqm']} m²")
+        st.markdown("##### Stammdaten")
+        stat("Adresse", p["address"])
+        stat("Wohnfläche", f"{p['wohnflaeche_sqm']} m²")
         if baujahr:
-            st.write(f"**Baujahr:** {baujahr}")
+            stat("Baujahr", baujahr)
         if heizung_str:
-            st.write(f"**Heizung:** {heizung_str}")
+            stat("Heizung", heizung_str)
         if ea_expiry_de:
-            st.write(f"**Energieausweis:** gültig bis {ea_expiry_de}")
-        st.write(f"**Kaufdatum:** {german_date(p['purchase_date'])}")
-        st.write(f"**€/m² (Kaufpreis):** {euro(price_per_sqm, 2)}")
-        st.write(f"**€/m² (Kaltmiete):** {euro(rent_per_sqm, 2)}")
+            stat("Energieausweis gültig bis", ea_expiry_de)
+        stat("Kaufdatum", german_date(p["purchase_date"]))
+        stat("€/m² (Kaufpreis)", euro(price_per_sqm, 2))
+        stat("€/m² (Kaltmiete)", euro(rent_per_sqm, 2))
 
     with d2:
-        st.markdown("**Wirtschaft**")
-        st.write(f"**Kaufpreis:** {euro(p['purchase_price'])}")
-        st.write(f"**Kaufnebenkosten:** {euro(p['kaufnebenkosten_total'])}")
-        st.write(f"**Gesamterwerbskosten:** {euro(total_acq)}")
-        st.write(f"**Kaltmiete (mtl.):** {euro(p['kaltmiete_monthly'])}")
+        st.markdown("##### Wirtschaft")
+        stat("Kaufpreis", euro(p["purchase_price"]))
+        stat("Kaufnebenkosten", euro(p["kaufnebenkosten_total"]))
+        stat("Gesamterwerbskosten", euro(total_acq))
+        stat("Kaltmiete (mtl.)", euro(p["kaltmiete_monthly"]))
         if mietspiegel:
-            st.write(f"**Mietspiegel:** {euro(mietspiegel, 2)} /m²")
-        st.write(f"**Bewirtschaftungskosten (mtl.):** {euro(p['opex_monthly_total'])}")
+            stat("Mietspiegel", f"{euro(mietspiegel, 2)} /m²")
+        stat("Bewirtschaftung (mtl.)", euro(p["opex_monthly_total"]))
 
         annual_rent = p["kaltmiete_monthly"] * 12
         annual_opex = p["opex_monthly_total"] * 12
-        st.write(
-            f"**Bruttomietrendite:** {percent(gross_yield(annual_rent, p['purchase_price']))}"
+        stat(
+            "Bruttomietrendite",
+            percent(gross_yield(annual_rent, p["purchase_price"])),
         )
-        st.write(
-            f"**Nettomietrendite:** {percent(net_yield(annual_rent, annual_opex, total_acq))}"
+        stat(
+            "Nettomietrendite",
+            percent(net_yield(annual_rent, annual_opex, total_acq)),
         )
 
     with d3:
-        st.markdown("**Finanzierung**")
+        st.markdown("##### Finanzierung")
         annual_rent = p["kaltmiete_monthly"] * 12
         annual_opex = p["opex_monthly_total"] * 12
         if loan:
@@ -440,20 +496,33 @@ else:
                 / 100
             )
             annual_tilgung = loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100
-
-            st.write(f"**Bank:** {loan['bank']}")
-            st.write(f"**Darlehenssumme:** {euro(loan['darlehenssumme'])}")
-            st.write(f"**Zinssatz:** {percent(loan['zinssatz_pct'])}")
-            st.write(f"**Tilgung (anfänglich):** {percent(loan['tilgung_anfang_pct'])}")
-            st.write(f"**Zinsbindung bis:** {german_date(loan['zinsbindung_end'])}")
             current_rest = current_restschuld(loan, p["purchase_date"])
-            st.write(f"**Restschuld aktuell:** {euro(current_rest)}")
-            st.write(f"**Eigenkapital eingesetzt:** {euro(eigenkapital)}")
-            st.write(
-                f"**Cash-on-Cash:** {percent(cash_on_cash(annual_rent, annual_opex, annual_debt, eigenkapital))}"
+
+            stat("Bank", loan["bank"])
+            stat("Darlehenssumme", euro(loan["darlehenssumme"]))
+            stat("Zinssatz", percent(loan["zinssatz_pct"]))
+            stat("Tilgung (anfänglich)", percent(loan["tilgung_anfang_pct"]))
+            stat("Zinsbindung bis", german_date(loan["zinsbindung_end"]))
+            stat("Restschuld aktuell", euro(current_rest))
+            stat("Eigenkapital eingesetzt", euro(eigenkapital))
+            stat(
+                "Cash-on-Cash",
+                percent(
+                    cash_on_cash(annual_rent, annual_opex, annual_debt, eigenkapital)
+                ),
             )
-            st.write(
-                f"**Gesamtrendite:** {percent(true_total_return(annual_rent, annual_opex, annual_debt, annual_tilgung, p['kaufnebenkosten_total'], eigenkapital))}"
+            stat(
+                "Gesamtrendite",
+                percent(
+                    true_total_return(
+                        annual_rent,
+                        annual_opex,
+                        annual_debt,
+                        annual_tilgung,
+                        p["kaufnebenkosten_total"],
+                        eigenkapital,
+                    )
+                ),
             )
             st.caption(
                 "Gesamtrendite: ohne Wertsteigerung, KNK über 10 Jahre amortisiert, Tilgung als Eigenkapitalaufbau."
@@ -462,12 +531,46 @@ else:
             st.info(
                 "Keine Finanzierungsdaten hinterlegt. Klicke oben auf Bearbeiten, um sie zu erfassen."
             )
-            st.write(
-                f"**Cash-on-Cash (ohne Finanzierung):** {percent(cash_on_cash(annual_rent, annual_opex, 0, total_acq))}"
+            stat(
+                "Cash-on-Cash (ohne Finanzierung)",
+                percent(cash_on_cash(annual_rent, annual_opex, 0, total_acq)),
             )
-            st.write(
-                f"**Gesamtrendite (ohne Finanzierung):** {percent(true_total_return(annual_rent, annual_opex, 0, 0, p['kaufnebenkosten_total'], total_acq))}"
+            stat(
+                "Gesamtrendite (ohne Finanzierung)",
+                percent(
+                    true_total_return(
+                        annual_rent,
+                        annual_opex,
+                        0,
+                        0,
+                        p["kaufnebenkosten_total"],
+                        total_acq,
+                    )
+                ),
             )
+
+    st.divider()
+    st.markdown("##### Mietvertrag")
+    mv1, mv2, mv3 = st.columns(3)
+    with mv1:
+        stat("Mieter", p.get("mieter_name"))
+        stat(
+            "Mietbeginn",
+            german_date(p["mietbeginn_date"]) if p.get("mietbeginn_date") else None,
+        )
+    with mv2:
+        stat("Mietart", p.get("mietart"))
+        stat(
+            "Letzte Mieterhöhung",
+            german_date(p["letzte_mieterhoehung_date"])
+            if p.get("letzte_mieterhoehung_date")
+            else None,
+        )
+    with mv3:
+        nk = p.get("nebenkosten_vorauszahlung_monthly")
+        stat("NK-Vorauszahlung (mtl.)", euro(nk) if nk else None)
+        kaution = p.get("kaution_eur")
+        stat("Kaution", euro(kaution) if kaution else None)
 
     st.divider()
     st.subheader("Hinweise & Termine")

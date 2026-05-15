@@ -1,3 +1,5 @@
+import html as _html
+
 import streamlit as st
 
 from seed_portfolio import LOANS_BY_PROPERTY_ID, PROPERTIES_BY_ID
@@ -49,6 +51,26 @@ def parse_german_number(text):
         return float(s)
     except ValueError:
         return None
+
+
+def stat(label, value):
+    if value is None or value == "":
+        safe_value = "—"
+    else:
+        safe_value = _html.escape(str(value))
+    safe_label = _html.escape(str(label))
+    st.markdown(
+        (
+            f'<div style="margin-bottom: 14px;">'
+            f'<div style="color: #8b949e; font-size: 0.72rem; '
+            f'text-transform: uppercase; letter-spacing: 0.06em; '
+            f'margin-bottom: 2px;">{safe_label}</div>'
+            f'<div style="color: #e6edf3; font-size: 1rem; '
+            f'font-weight: 500;">{safe_value}</div>'
+            f"</div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def get_property(property_id):

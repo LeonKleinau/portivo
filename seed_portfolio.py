@@ -13,6 +13,12 @@ PORTFOLIO = [
         "heizung_installation_year": 2008,
         "energieausweis_date": "2019-05-15",
         "mietspiegel_eur_per_sqm": 16.00,
+        "mieter_name": "Familie Schneider",
+        "mietbeginn_date": "2019-08-01",
+        "mietart": "Unbefristet",
+        "nebenkosten_vorauszahlung_monthly": 180,
+        "kaution_eur": 2_730,
+        "letzte_mieterhoehung_date": "2022-04-01",
     },
     {
         "property_id": "BER-002",
@@ -28,6 +34,12 @@ PORTFOLIO = [
         "heizung_installation_year": 2015,
         "energieausweis_date": "2020-02-15",
         "mietspiegel_eur_per_sqm": 13.50,
+        "mieter_name": "Frau Becker",
+        "mietbeginn_date": "2020-04-15",
+        "mietart": "Indexmiete",
+        "nebenkosten_vorauszahlung_monthly": 150,
+        "kaution_eur": 1_875,
+        "letzte_mieterhoehung_date": "2024-09-01",
     },
     {
         "property_id": "BER-003",
@@ -43,6 +55,12 @@ PORTFOLIO = [
         "heizung_installation_year": 2002,
         "energieausweis_date": "2017-10-01",
         "mietspiegel_eur_per_sqm": 17.00,
+        "mieter_name": "Herr Wagner",
+        "mietbeginn_date": "2018-02-01",
+        "mietart": "Unbefristet",
+        "nebenkosten_vorauszahlung_monthly": 260,
+        "kaution_eur": 3_930,
+        "letzte_mieterhoehung_date": "2023-06-01",
     },
     {
         "property_id": "BER-004",
@@ -58,6 +76,12 @@ PORTFOLIO = [
         "heizung_installation_year": 2018,
         "energieausweis_date": "2022-08-01",
         "mietspiegel_eur_per_sqm": 12.50,
+        "mieter_name": "Frau Yilmaz",
+        "mietbeginn_date": "2023-01-15",
+        "mietart": "Staffelmiete",
+        "nebenkosten_vorauszahlung_monthly": 130,
+        "kaution_eur": 1_980,
+        "letzte_mieterhoehung_date": "2025-01-15",
     },
 ]
 
@@ -70,7 +94,6 @@ LOANS = [
         "zinssatz_pct": 1.5,
         "zinsbindung_end": "2029-06-15",
         "tilgung_anfang_pct": 2.0,
-        "restschuld_current": 285_000,
     },
     {
         "loan_id": "LOAN-BER-002",
@@ -80,7 +103,6 @@ LOANS = [
         "zinssatz_pct": 1.2,
         "zinsbindung_end": "2030-03-02",
         "tilgung_anfang_pct": 2.5,
-        "restschuld_current": 185_000,
     },
     {
         "loan_id": "LOAN-BER-003",
@@ -90,7 +112,6 @@ LOANS = [
         "zinssatz_pct": 1.8,
         "zinsbindung_end": "2027-11-20",
         "tilgung_anfang_pct": 2.0,
-        "restschuld_current": 360_000,
     },
 ]
 
