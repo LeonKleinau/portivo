@@ -33,6 +33,42 @@ def true_total_return(
     return ((cashflow + annual_tilgung - knk_amortised) / eigenkapital) * 100
 
 
+def equity_buildup(
+    purchase_price,
+    initial_loan,
+    appreciation_pct_annual,
+    amort_schedule,
+    horizon_years=None,
+):
+    rate = appreciation_pct_annual / 100
+    if horizon_years is None:
+        horizon_years = len(amort_schedule)
+
+    rest_by_year = {0: initial_loan}
+    for entry in amort_schedule:
+        rest_by_year[entry["year"]] = entry["closing_balance"]
+    last_known_year = max(rest_by_year.keys()) if rest_by_year else 0
+
+    out = []
+    for year in range(0, horizon_years + 1):
+        if year in rest_by_year:
+            restschuld = rest_by_year[year]
+        elif year > last_known_year:
+            restschuld = 0
+        else:
+            restschuld = initial_loan
+        property_value = purchase_price * ((1 + rate) ** year)
+        out.append(
+            {
+                "year": year,
+                "restschuld": restschuld,
+                "property_value": property_value,
+                "equity": property_value - restschuld,
+            }
+        )
+    return out
+
+
 def gesamtrendite_components(
     annual_rent,
     annual_opex,

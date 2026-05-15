@@ -3,6 +3,7 @@ import pytest
 from calculations import (
     amortisation_schedule,
     cash_on_cash,
+    equity_buildup,
     gesamtrendite_components,
     gross_yield,
     net_yield,
@@ -270,3 +271,69 @@ def test_ber001_gesamtrendite_decomposition_matches_excel():
     assert parts["tilgung"] == pytest.approx(6_720 / 126_000 * 100, abs=1e-6)
     assert parts["knk_amort"] == pytest.approx(-4_200 / 126_000 * 100, abs=1e-6)
     assert parts["total"] == pytest.approx(-480 / 126_000 * 100, abs=1e-6)
+
+
+# --- equity_buildup ---
+
+
+def test_equity_buildup_year_zero_no_appreciation():
+    # At t=0 with 0% appreciation: equity = purchase_price - initial_loan (KNK is sunk).
+    schedule = amortisation_schedule(300_000, 2.0, 2.0, years=5)
+    buildup = equity_buildup(
+        purchase_price=400_000,
+        initial_loan=300_000,
+        appreciation_pct_annual=0.0,
+        amort_schedule=schedule,
+    )
+    assert buildup[0]["year"] == 0
+    assert buildup[0]["equity"] == pytest.approx(100_000)
+
+
+def test_equity_buildup_no_appreciation_grows_only_via_tilgung():
+    # With 0% appreciation, equity growth equals Tilgung accumulated.
+    schedule = amortisation_schedule(300_000, 2.0, 2.0, years=5)
+    buildup = equity_buildup(
+        purchase_price=400_000,
+        initial_loan=300_000,
+        appreciation_pct_annual=0.0,
+        amort_schedule=schedule,
+    )
+    year_5_tilgung_accumulated = 300_000 - schedule[4]["closing_balance"]
+    assert buildup[5]["equity"] == pytest.approx(100_000 + year_5_tilgung_accumulated)
+
+
+def test_equity_buildup_appreciation_compounds_on_property_value():
+    # With 2% appreciation, year 10 property value = purchase_price × 1.02^10
+    schedule = amortisation_schedule(300_000, 2.0, 2.0, years=10)
+    buildup = equity_buildup(
+        purchase_price=400_000,
+        initial_loan=300_000,
+        appreciation_pct_annual=2.0,
+        amort_schedule=schedule,
+    )
+    expected_year10_value = 400_000 * (1.02 ** 10)
+    assert buildup[10]["property_value"] == pytest.approx(expected_year10_value)
+
+
+# BER-001 reconciliation: at Zinsbindung-Ende (year 10)
+#   purchase_price        = 420,000
+#   restschuld year 10    = 264,077.71 (from amort_schedule(336000, 1.5, 2.0))
+#   property_value 0% app = 420,000
+#   equity 0% appreciation = 420,000 - 264,077.71 = 155,922.29
+#
+#   eigenkapital eingesetzt (cash actually paid) = 462,000 - 336,000 = 126,000
+#   So even at 0% appreciation, by year 10 EK has grown from day-1 84,000 (= 420k-336k)
+#   to 155,922 — recovering the 42k KNK paid on day 1 and adding 29,922 of true wealth.
+
+
+def test_ber001_equity_buildup_year10_no_appreciation():
+    schedule = amortisation_schedule(336_000, 1.5, 2.0, years=15)
+    buildup = equity_buildup(
+        purchase_price=420_000,
+        initial_loan=336_000,
+        appreciation_pct_annual=0.0,
+        amort_schedule=schedule,
+    )
+    y10 = buildup[10]
+    assert y10["restschuld"] == pytest.approx(264_077.71, abs=0.01)
+    assert y10["equity"] == pytest.approx(420_000 - 264_077.71, abs=0.01)
