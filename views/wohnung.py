@@ -1,8 +1,7 @@
 from datetime import date
 
-import streamlit as st
-
 import plotly.graph_objects as go
+import streamlit as st
 
 from calculations import (
     amortisation_schedule,
@@ -24,6 +23,173 @@ from utils import (
     save_user_loan,
     save_user_property,
 )
+
+
+def _render_analytics(p, loan, total_acq):
+    st.subheader("Cashflow (monatlich)")
+    monthly_rent = p["kaltmiete_monthly"]
+    monthly_opex = p["opex_monthly_total"]
+    if loan:
+        monthly_interest = loan["darlehenssumme"] * loan["zinssatz_pct"] / 100 / 12
+        monthly_tilgung = (
+            loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100 / 12
+        )
+    else:
+        monthly_interest = 0
+        monthly_tilgung = 0
+
+    net_cashflow = monthly_rent - monthly_opex - monthly_interest - monthly_tilgung
+    cashflow_total_color = "#8b0000" if net_cashflow < 0 else "#1b5e20"
+    wf = go.Figure(
+        go.Waterfall(
+            orientation="v",
+            measure=["relative", "relative", "relative", "relative", "total"],
+            x=["Kaltmiete", "Bewirtschaftung", "Zinsen", "Tilgung", "Netto"],
+            y=[monthly_rent, -monthly_opex, -monthly_interest, -monthly_tilgung, 0],
+            text=[
+                euro(monthly_rent),
+                euro(-monthly_opex),
+                euro(-monthly_interest),
+                euro(-monthly_tilgung),
+                "",
+            ],
+            textposition="outside",
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            increasing={"marker": {"color": "#4caf50"}},
+            decreasing={"marker": {"color": "#f44336"}},
+            totals={"marker": {"color": cashflow_total_color}},
+        )
+    )
+    wf.update_layout(
+        yaxis_title="€",
+        height=400,
+        margin=dict(t=20, b=40, l=20, r=20),
+        showlegend=False,
+    )
+    st.plotly_chart(wf, use_container_width=True)
+
+    if loan:
+        st.divider()
+        st.subheader("Tilgungsplan")
+
+        schedule = amortisation_schedule(
+            loan["darlehenssumme"],
+            loan["zinssatz_pct"],
+            loan["tilgung_anfang_pct"],
+            years=40,
+        )
+        years_axis = [0] + [s["year"] for s in schedule]
+        balances = [loan["darlehenssumme"]] + [s["closing_balance"] for s in schedule]
+
+        purchase_d = date.fromisoformat(p["purchase_date"])
+        zb_d = date.fromisoformat(loan["zinsbindung_end"])
+        zinsbindung_years = (zb_d - purchase_d).days / 365.25
+
+        zb_year_idx = min(int(round(zinsbindung_years)), len(schedule))
+        if zb_year_idx >= 1:
+            zb_balance = schedule[zb_year_idx - 1]["closing_balance"]
+        else:
+            zb_balance = loan["darlehenssumme"]
+        tilgung_pct_done = (
+            (loan["darlehenssumme"] - zb_balance) / loan["darlehenssumme"] * 100
+        )
+
+        amort = go.Figure()
+        amort.add_trace(
+            go.Scatter(
+                x=years_axis,
+                y=balances,
+                mode="lines+markers",
+                line={"color": "#1976d2", "width": 3},
+                marker={"size": 5},
+                hovertemplate="Jahr %{x}<br>Restschuld: € %{y:,.0f}<extra></extra>",
+                name="Restschuld",
+            )
+        )
+        amort.add_vline(
+            x=zinsbindung_years,
+            line_dash="dash",
+            line_color="#f44336",
+            annotation_text="Zinsbindung-Ende",
+            annotation_position="top right",
+        )
+        amort.update_layout(
+            xaxis_title="Jahre seit Kauf",
+            yaxis_title="Restschuld (€)",
+            height=400,
+            margin=dict(t=20, b=40, l=20, r=20),
+            showlegend=False,
+        )
+        st.plotly_chart(amort, use_container_width=True)
+
+        st.caption(
+            f"Bei Zinsbindung-Ende ({german_date(loan['zinsbindung_end'])}): "
+            f"projizierte Restschuld {euro(zb_balance)} — {percent(tilgung_pct_done)} getilgt. "
+            f"Nach diesem Zeitpunkt benötigt das Darlehen eine Anschlussfinanzierung zum dann gültigen Marktzins."
+        )
+
+    st.divider()
+    st.subheader("Renditezerlegung")
+
+    rent_for_decomp = p["kaltmiete_monthly"] * 12
+    opex_for_decomp = p["opex_monthly_total"] * 12
+    if loan:
+        debt_for_decomp = (
+            loan["darlehenssumme"]
+            * (loan["zinssatz_pct"] + loan["tilgung_anfang_pct"])
+            / 100
+        )
+        tilgung_for_decomp = (
+            loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100
+        )
+        ek_for_decomp = total_acq - loan["darlehenssumme"]
+    else:
+        debt_for_decomp = 0
+        tilgung_for_decomp = 0
+        ek_for_decomp = total_acq
+
+    parts = gesamtrendite_components(
+        annual_rent=rent_for_decomp,
+        annual_opex=opex_for_decomp,
+        annual_debt_service=debt_for_decomp,
+        annual_tilgung=tilgung_for_decomp,
+        kaufnebenkosten=p["kaufnebenkosten_total"],
+        eigenkapital=ek_for_decomp,
+        holding_period_years=10,
+    )
+
+    decomp_total_color = "#8b0000" if parts["total"] < 0 else "#1b5e20"
+    rd = go.Figure(
+        go.Waterfall(
+            orientation="v",
+            measure=["relative", "relative", "relative", "total"],
+            x=["Cashflow", "Tilgung", "KNK-Abschlag", "Gesamtrendite"],
+            y=[parts["cashflow"], parts["tilgung"], parts["knk_amort"], 0],
+            text=[
+                percent(parts["cashflow"]),
+                percent(parts["tilgung"]),
+                percent(parts["knk_amort"]),
+                "",
+            ],
+            textposition="outside",
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            increasing={"marker": {"color": "#4caf50"}},
+            decreasing={"marker": {"color": "#f44336"}},
+            totals={"marker": {"color": decomp_total_color}},
+        )
+    )
+    rd.update_layout(
+        yaxis_title="% p.a. auf Eigenkapital",
+        height=400,
+        margin=dict(t=20, b=40, l=20, r=20),
+        showlegend=False,
+    )
+    st.plotly_chart(rd, use_container_width=True)
+    st.caption(
+        "Cashflow + Eigenkapitalaufbau durch Tilgung − Kaufnebenkosten amortisiert (10 J.) = Gesamtrendite. "
+        "Ohne Wertsteigerung."
+    )
+
 
 if st.button("← Zurück zum Portfolio"):
     st.session_state.pop("selected_property_id", None)
@@ -198,12 +364,38 @@ else:
     rent_per_sqm = p["kaltmiete_monthly"] / p["wohnflaeche_sqm"]
     price_per_sqm = p["purchase_price"] / p["wohnflaeche_sqm"]
 
+    heizungsart = p.get("heizungsart")
+    install_year = p.get("heizung_installation_year")
+    if heizungsart and install_year:
+        heizung_str = f"{heizungsart} (Einbau {install_year})"
+    elif heizungsart:
+        heizung_str = heizungsart
+    else:
+        heizung_str = None
+
+    ea_date_str = p.get("energieausweis_date")
+    if ea_date_str:
+        ea_issue = date.fromisoformat(ea_date_str)
+        ea_expiry_iso = f"{ea_issue.year + 10}-{ea_issue.month:02d}-{ea_issue.day:02d}"
+        ea_expiry_de = german_date(ea_expiry_iso)
+    else:
+        ea_expiry_de = None
+
+    mietspiegel = p.get("mietspiegel_eur_per_sqm")
+    baujahr = p.get("baujahr")
+
     d1, d2, d3 = st.columns(3)
 
     with d1:
         st.markdown("**Stammdaten**")
         st.write(f"**Adresse:** {p['address']}")
         st.write(f"**Wohnfläche:** {p['wohnflaeche_sqm']} m²")
+        if baujahr:
+            st.write(f"**Baujahr:** {baujahr}")
+        if heizung_str:
+            st.write(f"**Heizung:** {heizung_str}")
+        if ea_expiry_de:
+            st.write(f"**Energieausweis:** gültig bis {ea_expiry_de}")
         st.write(f"**Kaufdatum:** {german_date(p['purchase_date'])}")
         st.write(f"**€/m² (Kaufpreis):** {euro(price_per_sqm, 2)}")
         st.write(f"**€/m² (Kaltmiete):** {euro(rent_per_sqm, 2)}")
@@ -214,6 +406,8 @@ else:
         st.write(f"**Kaufnebenkosten:** {euro(p['kaufnebenkosten_total'])}")
         st.write(f"**Gesamterwerbskosten:** {euro(total_acq)}")
         st.write(f"**Kaltmiete (mtl.):** {euro(p['kaltmiete_monthly'])}")
+        if mietspiegel:
+            st.write(f"**Mietspiegel:** {euro(mietspiegel, 2)} /m²")
         st.write(f"**Bewirtschaftungskosten (mtl.):** {euro(p['opex_monthly_total'])}")
 
         annual_rent = p["kaltmiete_monthly"] * 12
@@ -281,166 +475,5 @@ else:
                 st.info(f"**{alert['title']}**\n\n{alert['detail']}")
 
     st.divider()
-    st.subheader("Cashflow (monatlich)")
-    monthly_rent = p["kaltmiete_monthly"]
-    monthly_opex = p["opex_monthly_total"]
-    if loan:
-        monthly_interest = loan["darlehenssumme"] * loan["zinssatz_pct"] / 100 / 12
-        monthly_tilgung = (
-            loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100 / 12
-        )
-    else:
-        monthly_interest = 0
-        monthly_tilgung = 0
-
-    net_cashflow = monthly_rent - monthly_opex - monthly_interest - monthly_tilgung
-    cashflow_total_color = "#8b0000" if net_cashflow < 0 else "#1b5e20"
-    wf = go.Figure(
-        go.Waterfall(
-            orientation="v",
-            measure=["relative", "relative", "relative", "relative", "total"],
-            x=["Kaltmiete", "Bewirtschaftung", "Zinsen", "Tilgung", "Netto"],
-            y=[monthly_rent, -monthly_opex, -monthly_interest, -monthly_tilgung, 0],
-            text=[
-                euro(monthly_rent),
-                euro(-monthly_opex),
-                euro(-monthly_interest),
-                euro(-monthly_tilgung),
-                "",
-            ],
-            textposition="outside",
-            connector={"line": {"color": "rgb(63, 63, 63)"}},
-            increasing={"marker": {"color": "#4caf50"}},
-            decreasing={"marker": {"color": "#f44336"}},
-            totals={"marker": {"color": cashflow_total_color}},
-        )
-    )
-    wf.update_layout(
-        yaxis_title="€",
-        height=400,
-        margin=dict(t=20, b=40, l=20, r=20),
-        showlegend=False,
-    )
-    st.plotly_chart(wf, use_container_width=True)
-
-    if loan:
-        st.divider()
-        st.subheader("Tilgungsplan")
-
-        schedule = amortisation_schedule(
-            loan["darlehenssumme"],
-            loan["zinssatz_pct"],
-            loan["tilgung_anfang_pct"],
-            years=40,
-        )
-        years_axis = [0] + [s["year"] for s in schedule]
-        balances = [loan["darlehenssumme"]] + [s["closing_balance"] for s in schedule]
-
-        purchase_d = date.fromisoformat(p["purchase_date"])
-        zb_d = date.fromisoformat(loan["zinsbindung_end"])
-        zinsbindung_years = (zb_d - purchase_d).days / 365.25
-
-        zb_year_idx = min(int(round(zinsbindung_years)), len(schedule))
-        if zb_year_idx >= 1:
-            zb_balance = schedule[zb_year_idx - 1]["closing_balance"]
-        else:
-            zb_balance = loan["darlehenssumme"]
-        tilgung_pct_done = (
-            (loan["darlehenssumme"] - zb_balance) / loan["darlehenssumme"] * 100
-        )
-
-        amort = go.Figure()
-        amort.add_trace(
-            go.Scatter(
-                x=years_axis,
-                y=balances,
-                mode="lines+markers",
-                line={"color": "#1976d2", "width": 3},
-                marker={"size": 5},
-                hovertemplate="Jahr %{x}<br>Restschuld: € %{y:,.0f}<extra></extra>",
-                name="Restschuld",
-            )
-        )
-        amort.add_vline(
-            x=zinsbindung_years,
-            line_dash="dash",
-            line_color="#f44336",
-            annotation_text="Zinsbindung-Ende",
-            annotation_position="top right",
-        )
-        amort.update_layout(
-            xaxis_title="Jahre seit Kauf",
-            yaxis_title="Restschuld (€)",
-            height=400,
-            margin=dict(t=20, b=40, l=20, r=20),
-            showlegend=False,
-        )
-        st.plotly_chart(amort, use_container_width=True)
-
-        st.caption(
-            f"Bei Zinsbindung-Ende ({german_date(loan['zinsbindung_end'])}): "
-            f"projizierte Restschuld {euro(zb_balance)} — {percent(tilgung_pct_done)} getilgt. "
-            f"Nach diesem Zeitpunkt benötigt das Darlehen eine Anschlussfinanzierung zum dann gültigen Marktzins."
-        )
-
-    st.divider()
-    st.subheader("Renditezerlegung")
-
-    rent_for_decomp = p["kaltmiete_monthly"] * 12
-    opex_for_decomp = p["opex_monthly_total"] * 12
-    if loan:
-        debt_for_decomp = (
-            loan["darlehenssumme"]
-            * (loan["zinssatz_pct"] + loan["tilgung_anfang_pct"])
-            / 100
-        )
-        tilgung_for_decomp = (
-            loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100
-        )
-        ek_for_decomp = total_acq - loan["darlehenssumme"]
-    else:
-        debt_for_decomp = 0
-        tilgung_for_decomp = 0
-        ek_for_decomp = total_acq
-
-    parts = gesamtrendite_components(
-        annual_rent=rent_for_decomp,
-        annual_opex=opex_for_decomp,
-        annual_debt_service=debt_for_decomp,
-        annual_tilgung=tilgung_for_decomp,
-        kaufnebenkosten=p["kaufnebenkosten_total"],
-        eigenkapital=ek_for_decomp,
-        holding_period_years=10,
-    )
-
-    decomp_total_color = "#8b0000" if parts["total"] < 0 else "#1b5e20"
-    rd = go.Figure(
-        go.Waterfall(
-            orientation="v",
-            measure=["relative", "relative", "relative", "total"],
-            x=["Cashflow", "Tilgung", "KNK-Abschlag", "Gesamtrendite"],
-            y=[parts["cashflow"], parts["tilgung"], parts["knk_amort"], 0],
-            text=[
-                percent(parts["cashflow"]),
-                percent(parts["tilgung"]),
-                percent(parts["knk_amort"]),
-                "",
-            ],
-            textposition="outside",
-            connector={"line": {"color": "rgb(63, 63, 63)"}},
-            increasing={"marker": {"color": "#4caf50"}},
-            decreasing={"marker": {"color": "#f44336"}},
-            totals={"marker": {"color": decomp_total_color}},
-        )
-    )
-    rd.update_layout(
-        yaxis_title="% p.a. auf Eigenkapital",
-        height=400,
-        margin=dict(t=20, b=40, l=20, r=20),
-        showlegend=False,
-    )
-    st.plotly_chart(rd, use_container_width=True)
-    st.caption(
-        "Cashflow + Eigenkapitalaufbau durch Tilgung − Kaufnebenkosten amortisiert (10 J.) = Gesamtrendite. "
-        "Ohne Wertsteigerung."
-    )
+    with st.expander("📊 Analytik & Diagramme", expanded=False):
+        _render_analytics(p, loan, total_acq)
