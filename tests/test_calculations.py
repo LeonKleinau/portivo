@@ -2,7 +2,9 @@ import pytest
 
 from calculations import (
     amortisation_schedule,
+    breakeven_rate_pct,
     cash_on_cash,
+    cashflow_at_new_rate,
     equity_buildup,
     gesamtrendite_components,
     gross_yield,
@@ -164,6 +166,67 @@ def test_ber001_true_total_return_matches_excel():
         holding_period_years=10,
     )
     assert ttr == pytest.approx(-480 / 126_000 * 100, abs=1e-6)
+
+
+# --- cashflow_at_new_rate ---
+
+
+def test_cashflow_at_new_rate_basic():
+    # rent=1000 opex=100 restschuld=200_000 rate=3 tilgung=2
+    # annuity = 200_000 × 5 % / 12 = 833.333...
+    # cashflow = 1000 - 100 - 833.333 = 66.667
+    assert cashflow_at_new_rate(1000, 100, 200_000, 3.0, 2.0) == pytest.approx(
+        1000 - 100 - 200_000 * 0.05 / 12, abs=1e-6
+    )
+
+
+def test_cashflow_at_new_rate_no_debt():
+    assert cashflow_at_new_rate(1000, 100, 0, 3.0, 2.0) == 900
+
+
+def test_cashflow_at_new_rate_high_rate_goes_negative():
+    cf = cashflow_at_new_rate(1000, 100, 200_000, 10.0, 2.0)
+    assert cf < 0
+
+
+# --- breakeven_rate_pct ---
+
+
+def test_breakeven_rate_basic():
+    # net_op = 900, restschuld = 200_000, tilgung = 2
+    # breakeven = 900 × 1200 / 200_000 - 2 = 5.4 - 2 = 3.4 %
+    assert breakeven_rate_pct(1000, 100, 200_000, 2.0) == pytest.approx(3.4)
+
+
+def test_breakeven_rate_no_debt_returns_none():
+    assert breakeven_rate_pct(1000, 100, 0, 2.0) is None
+
+
+def test_breakeven_rate_round_trip_zero_cashflow():
+    # Plugging the breakeven rate back into cashflow_at_new_rate must yield ~0
+    rate = breakeven_rate_pct(1000, 100, 200_000, 2.0)
+    cf = cashflow_at_new_rate(1000, 100, 200_000, rate, 2.0)
+    assert cf == pytest.approx(0, abs=1e-6)
+
+
+# BER-003 reconciliation: post-Zinsbindung Cashflow-Sensitivität
+#   rent=1,310 opex=220 restschuld_current=360,000 tilgung=2.0
+#   net_op = 1,090
+#   breakeven = 1,090 × 1200 / 360,000 - 2.0 = 3.6333... - 2.0 = 1.6333... %
+
+
+def test_ber003_breakeven_matches_excel():
+    assert breakeven_rate_pct(1310, 220, 360_000, 2.0) == pytest.approx(
+        1090 * 1200 / 360_000 - 2.0, abs=1e-6
+    )
+
+
+def test_ber003_cashflow_at_market_rate_matches_excel():
+    # Marktzins ≈ 3.8 %, post-prolongation: rest=360_000, tilgung=2.0
+    # annuity = 360_000 × 5.8 % / 12 = 1,740
+    # cashflow = 1,310 - 220 - 1,740 = -650
+    cf = cashflow_at_new_rate(1310, 220, 360_000, 3.8, 2.0)
+    assert cf == pytest.approx(1310 - 220 - 360_000 * 0.058 / 12, abs=1e-6)
 
 
 # --- amortisation_schedule ---

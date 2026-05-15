@@ -5,7 +5,9 @@ import streamlit as st
 
 from calculations import (
     amortisation_schedule,
+    breakeven_rate_pct,
     cash_on_cash,
+    cashflow_at_new_rate,
     gesamtrendite_components,
     gross_yield,
     net_yield,
@@ -473,6 +475,55 @@ else:
                 st.warning(f"**{alert['title']}**\n\n{alert['detail']}")
             else:
                 st.info(f"**{alert['title']}**\n\n{alert['detail']}")
+
+    if loan:
+        st.divider()
+        st.subheader("Cashflow-Sensitivität")
+        st.caption(
+            f"Wie verändert sich der monatliche Cashflow nach Anschlussfinanzierung "
+            f"bei verschiedenen Zinssätzen? Annahme: Restschuld {euro(loan['restschuld_current'])} "
+            f"refinanziert, Tilgung bleibt bei {percent(loan['tilgung_anfang_pct'])}."
+        )
+
+        rate_scenarios = [1.5, 2.0, 3.0, 4.0, 5.0]
+        rows = [
+            "| Zinssatz | Annuität (mtl.) | Cashflow (mtl.) |",
+            "|---|---|---|",
+        ]
+        for r in rate_scenarios:
+            monthly_annuity = (
+                loan["restschuld_current"] * (r + loan["tilgung_anfang_pct"]) / 100 / 12
+            )
+            cf = cashflow_at_new_rate(
+                p["kaltmiete_monthly"],
+                p["opex_monthly_total"],
+                loan["restschuld_current"],
+                r,
+                loan["tilgung_anfang_pct"],
+            )
+            indicator = "🟢" if cf >= 0 else "🔴"
+            rows.append(
+                f"| {percent(r)} | {euro(monthly_annuity)} | {indicator} {euro(cf)} |"
+            )
+        st.markdown("\n".join(rows))
+
+        be = breakeven_rate_pct(
+            p["kaltmiete_monthly"],
+            p["opex_monthly_total"],
+            loan["restschuld_current"],
+            loan["tilgung_anfang_pct"],
+        )
+        if be is not None:
+            if be <= 0:
+                st.error(
+                    f"**Break-Even-Zinssatz: {percent(be)}** — bereits bei einem Zinssatz von 0 % "
+                    f"ist der Cashflow negativ. Operative Kosten oder Tilgung zehren die Miete auf."
+                )
+            else:
+                st.warning(
+                    f"**Break-Even-Zinssatz: {percent(be)}** — oberhalb dieses Zinssatzes "
+                    f"wird der monatliche Cashflow negativ."
+                )
 
     st.divider()
     with st.expander("📊 Analytik & Diagramme", expanded=False):

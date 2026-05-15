@@ -93,6 +93,22 @@ def gesamtrendite_components(
     }
 
 
+def cashflow_at_new_rate(
+    rent_monthly, opex_monthly, restschuld, new_rate_pct, tilgung_pct
+):
+    if restschuld <= 0:
+        return rent_monthly - opex_monthly
+    monthly_annuity = restschuld * (new_rate_pct + tilgung_pct) / 100 / 12
+    return rent_monthly - opex_monthly - monthly_annuity
+
+
+def breakeven_rate_pct(rent_monthly, opex_monthly, restschuld, tilgung_pct):
+    if restschuld <= 0:
+        return None
+    net_op = rent_monthly - opex_monthly
+    return net_op * 1200 / restschuld - tilgung_pct
+
+
 def amortisation_schedule(
     principal, annual_interest_rate_pct, initial_tilgung_pct, years=30
 ):
