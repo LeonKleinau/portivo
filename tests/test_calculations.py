@@ -1,6 +1,7 @@
 import pytest
 
 from calculations import (
+    amortisation_schedule,
     cash_on_cash,
     gross_yield,
     net_yield,
@@ -161,3 +162,57 @@ def test_ber001_true_total_return_matches_excel():
         holding_period_years=10,
     )
     assert ttr == pytest.approx(-480 / 126_000 * 100, abs=1e-6)
+
+
+# --- amortisation_schedule ---
+
+
+def test_amortisation_empty_for_zero_principal():
+    assert amortisation_schedule(0, 1.5, 2.0, years=10) == []
+
+
+def test_amortisation_empty_for_zero_years():
+    assert amortisation_schedule(100_000, 1.5, 2.0, years=0) == []
+
+
+def test_amortisation_schedule_length():
+    schedule = amortisation_schedule(100_000, 1.5, 2.0, years=5)
+    assert len(schedule) == 5
+
+
+def test_amortisation_year1_constant_annuity():
+    # annuity is constant: principal * (rate + tilgung) / 100
+    schedule = amortisation_schedule(100_000, 2.0, 3.0, years=3)
+    expected_annuity = 100_000 * 0.05  # 5,000
+    for entry in schedule:
+        assert entry["annuity"] == pytest.approx(expected_annuity)
+
+
+def test_amortisation_interest_decreases_principal_increases():
+    schedule = amortisation_schedule(100_000, 2.0, 3.0, years=5)
+    for i in range(1, len(schedule)):
+        assert schedule[i]["interest"] < schedule[i - 1]["interest"]
+        assert schedule[i]["principal"] > schedule[i - 1]["principal"]
+
+
+def test_amortisation_balance_decreases_to_zero_eventually():
+    schedule = amortisation_schedule(100_000, 2.0, 3.0, years=50)
+    assert schedule[-1]["closing_balance"] == pytest.approx(0, abs=0.01)
+
+
+# Excel reconciliation: BER-001 year 1 of amortisation schedule
+#   principal = 336,000  rate = 1.5 %  tilgung = 2.0 %
+#   annuity   = 336,000 × 3.5 % = 11,760
+#   y1 interest          = 336,000 × 1.5 % = 5,040
+#   y1 principal payment = 11,760 − 5,040  = 6,720
+#   y1 closing balance   = 336,000 − 6,720 = 329,280
+
+
+def test_ber001_amortisation_year_one_matches_excel():
+    schedule = amortisation_schedule(336_000, 1.5, 2.0, years=10)
+    y1 = schedule[0]
+    assert y1["opening_balance"] == 336_000
+    assert y1["interest"] == pytest.approx(5_040)
+    assert y1["principal"] == pytest.approx(6_720)
+    assert y1["annuity"] == pytest.approx(11_760)
+    assert y1["closing_balance"] == pytest.approx(329_280)

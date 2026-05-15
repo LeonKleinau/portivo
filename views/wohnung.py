@@ -4,7 +4,13 @@ import streamlit as st
 
 import plotly.graph_objects as go
 
-from calculations import cash_on_cash, gross_yield, net_yield, true_total_return
+from calculations import (
+    amortisation_schedule,
+    cash_on_cash,
+    gross_yield,
+    net_yield,
+    true_total_return,
+)
 from utils import (
     euro,
     format_german_number,
@@ -293,3 +299,63 @@ else:
         showlegend=False,
     )
     st.plotly_chart(wf, use_container_width=True)
+
+    if loan:
+        st.divider()
+        st.subheader("Tilgungsplan")
+
+        schedule = amortisation_schedule(
+            loan["darlehenssumme"],
+            loan["zinssatz_pct"],
+            loan["tilgung_anfang_pct"],
+            years=40,
+        )
+        years_axis = [0] + [s["year"] for s in schedule]
+        balances = [loan["darlehenssumme"]] + [s["closing_balance"] for s in schedule]
+
+        purchase_d = date.fromisoformat(p["purchase_date"])
+        zb_d = date.fromisoformat(loan["zinsbindung_end"])
+        zinsbindung_years = (zb_d - purchase_d).days / 365.25
+
+        zb_year_idx = min(int(round(zinsbindung_years)), len(schedule))
+        if zb_year_idx >= 1:
+            zb_balance = schedule[zb_year_idx - 1]["closing_balance"]
+        else:
+            zb_balance = loan["darlehenssumme"]
+        tilgung_pct_done = (
+            (loan["darlehenssumme"] - zb_balance) / loan["darlehenssumme"] * 100
+        )
+
+        amort = go.Figure()
+        amort.add_trace(
+            go.Scatter(
+                x=years_axis,
+                y=balances,
+                mode="lines+markers",
+                line={"color": "#1976d2", "width": 3},
+                marker={"size": 5},
+                hovertemplate="Jahr %{x}<br>Restschuld: € %{y:,.0f}<extra></extra>",
+                name="Restschuld",
+            )
+        )
+        amort.add_vline(
+            x=zinsbindung_years,
+            line_dash="dash",
+            line_color="#f44336",
+            annotation_text="Zinsbindung-Ende",
+            annotation_position="top right",
+        )
+        amort.update_layout(
+            xaxis_title="Jahre seit Kauf",
+            yaxis_title="Restschuld (€)",
+            height=400,
+            margin=dict(t=20, b=40, l=20, r=20),
+            showlegend=False,
+        )
+        st.plotly_chart(amort, use_container_width=True)
+
+        st.caption(
+            f"Bei Zinsbindung-Ende ({german_date(loan['zinsbindung_end'])}): "
+            f"projizierte Restschuld {euro(zb_balance)} — {percent(tilgung_pct_done)} getilgt. "
+            f"Nach diesem Zeitpunkt benötigt das Darlehen eine Anschlussfinanzierung zum dann gültigen Marktzins."
+        )
