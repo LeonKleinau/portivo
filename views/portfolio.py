@@ -53,13 +53,14 @@ row2[2].metric("Cash-on-Cash (Ø)", percent(portfolio_coc))
 st.divider()
 
 chart_labels = []
-chart_rent = []
-chart_opex_neg = []
-chart_annuity_neg = []
+chart_net = []
+chart_rents = []
+chart_opex = []
+chart_annuity = []
 for p in resolved:
     chart_labels.append(p["address"].split(",")[0])
-    chart_rent.append(p["kaltmiete_monthly"])
-    chart_opex_neg.append(-p["opex_monthly_total"])
+    monthly_rent = p["kaltmiete_monthly"]
+    monthly_opex = p["opex_monthly_total"]
     loan = get_loan(p["property_id"])
     if loan:
         monthly_annuity = (
@@ -70,28 +71,46 @@ for p in resolved:
         )
     else:
         monthly_annuity = 0
-    chart_annuity_neg.append(-monthly_annuity)
+    net = monthly_rent - monthly_opex - monthly_annuity
+    chart_net.append(net)
+    chart_rents.append(monthly_rent)
+    chart_opex.append(monthly_opex)
+    chart_annuity.append(monthly_annuity)
 
-fig = go.Figure()
-fig.add_trace(
-    go.Bar(name="Kaltmiete", x=chart_labels, y=chart_rent, marker_color="#4caf50")
-)
-fig.add_trace(
-    go.Bar(name="Bewirtschaftung", x=chart_labels, y=chart_opex_neg, marker_color="#ff9800")
-)
-fig.add_trace(
-    go.Bar(name="Annuität", x=chart_labels, y=chart_annuity_neg, marker_color="#f44336")
+bar_colors = ["#2e7d32" if v >= 0 else "#c62828" for v in chart_net]
+bar_text = [euro(v) for v in chart_net]
+customdata = list(zip(chart_rents, chart_opex, chart_annuity))
+
+fig = go.Figure(
+    go.Bar(
+        x=chart_labels,
+        y=chart_net,
+        marker_color=bar_colors,
+        text=bar_text,
+        textposition="outside",
+        customdata=customdata,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Kaltmiete: € %{customdata[0]:,.0f}<br>"
+            "− Bewirtschaftung: € %{customdata[1]:,.0f}<br>"
+            "− Annuität: € %{customdata[2]:,.0f}<br>"
+            "<b>= Netto: € %{y:,.0f}</b>"
+            "<extra></extra>"
+        ),
+    )
 )
 fig.update_layout(
-    title="Monatlicher Cashflow pro Wohnung",
-    barmode="relative",
+    title="Monatlicher Netto-Cashflow pro Wohnung",
     yaxis_title="€",
     height=400,
     margin=dict(t=50, b=40, l=20, r=20),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    showlegend=False,
 )
-fig.add_hline(y=0, line_color="black", line_width=1)
+fig.add_hline(y=0, line_color="#666", line_width=1)
 st.plotly_chart(fig, use_container_width=True)
+st.caption(
+    "Grün = positiver Cashflow, rot = negativer Cashflow. Hover für die Aufschlüsselung in Kaltmiete, Bewirtschaftung und Annuität."
+)
 
 st.divider()
 
