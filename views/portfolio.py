@@ -1,3 +1,4 @@
+import plotly.graph_objects as go
 import streamlit as st
 
 from calculations import cash_on_cash, gross_yield, net_yield
@@ -48,6 +49,49 @@ row2 = st.columns(3)
 row2[0].metric("Bruttomietrendite (Ø)", percent(portfolio_brutto))
 row2[1].metric("Nettomietrendite (Ø)", percent(portfolio_netto))
 row2[2].metric("Cash-on-Cash (Ø)", percent(portfolio_coc))
+
+st.divider()
+
+chart_labels = []
+chart_rent = []
+chart_opex_neg = []
+chart_annuity_neg = []
+for p in resolved:
+    chart_labels.append(p["address"].split(",")[0])
+    chart_rent.append(p["kaltmiete_monthly"])
+    chart_opex_neg.append(-p["opex_monthly_total"])
+    loan = get_loan(p["property_id"])
+    if loan:
+        monthly_annuity = (
+            loan["darlehenssumme"]
+            * (loan["zinssatz_pct"] + loan["tilgung_anfang_pct"])
+            / 100
+            / 12
+        )
+    else:
+        monthly_annuity = 0
+    chart_annuity_neg.append(-monthly_annuity)
+
+fig = go.Figure()
+fig.add_trace(
+    go.Bar(name="Kaltmiete", x=chart_labels, y=chart_rent, marker_color="#4caf50")
+)
+fig.add_trace(
+    go.Bar(name="Bewirtschaftung", x=chart_labels, y=chart_opex_neg, marker_color="#ff9800")
+)
+fig.add_trace(
+    go.Bar(name="Annuität", x=chart_labels, y=chart_annuity_neg, marker_color="#f44336")
+)
+fig.update_layout(
+    title="Monatlicher Cashflow pro Wohnung",
+    barmode="relative",
+    yaxis_title="€",
+    height=400,
+    margin=dict(t=50, b=40, l=20, r=20),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+)
+fig.add_hline(y=0, line_color="black", line_width=1)
+st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 

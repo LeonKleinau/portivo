@@ -2,6 +2,8 @@ from datetime import date
 
 import streamlit as st
 
+import plotly.graph_objects as go
+
 from calculations import cash_on_cash, gross_yield, net_yield, true_total_return
 from utils import (
     euro,
@@ -250,3 +252,44 @@ else:
             st.write(
                 f"**Gesamtrendite (ohne Finanzierung):** {percent(true_total_return(annual_rent, annual_opex, 0, 0, p['kaufnebenkosten_total'], total_acq))}"
             )
+
+    st.divider()
+    st.subheader("Cashflow (monatlich)")
+    monthly_rent = p["kaltmiete_monthly"]
+    monthly_opex = p["opex_monthly_total"]
+    if loan:
+        monthly_interest = loan["darlehenssumme"] * loan["zinssatz_pct"] / 100 / 12
+        monthly_tilgung = (
+            loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100 / 12
+        )
+    else:
+        monthly_interest = 0
+        monthly_tilgung = 0
+
+    wf = go.Figure(
+        go.Waterfall(
+            orientation="v",
+            measure=["absolute", "relative", "relative", "relative", "total"],
+            x=["Kaltmiete", "Bewirtschaftung", "Zinsen", "Tilgung", "Netto"],
+            y=[monthly_rent, -monthly_opex, -monthly_interest, -monthly_tilgung, 0],
+            text=[
+                euro(monthly_rent),
+                euro(-monthly_opex),
+                euro(-monthly_interest),
+                euro(-monthly_tilgung),
+                "",
+            ],
+            textposition="outside",
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            increasing={"marker": {"color": "#4caf50"}},
+            decreasing={"marker": {"color": "#f44336"}},
+            totals={"marker": {"color": "#1976d2"}},
+        )
+    )
+    wf.update_layout(
+        yaxis_title="€",
+        height=400,
+        margin=dict(t=20, b=40, l=20, r=20),
+        showlegend=False,
+    )
+    st.plotly_chart(wf, use_container_width=True)
