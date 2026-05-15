@@ -57,21 +57,6 @@ row2[2].metric("Cash-on-Cash (Ø)", percent(portfolio_coc))
 
 st.divider()
 
-with st.container(border=True):
-    if st.button(
-        "🧮  Szenario-Rechner — IRR, Exit-Preis, Was-wäre-wenn",
-        key="open_szenario",
-        type="tertiary",
-        use_container_width=True,
-    ):
-        st.switch_page("views/szenario.py")
-    st.caption(
-        "Spiele mit Haltedauer, Wertsteigerung und Anschlusszins für eine oder "
-        "alle Wohnungen. Berechnet IRR und Exit-Eigenkapital wie ein Analyst-Report."
-    )
-
-st.divider()
-
 st.subheader("Wohnungen")
 st.caption("Klicke auf eine Adresse, um zur Detailansicht zu wechseln.")
 
@@ -110,15 +95,22 @@ for p in active:
             if loan:
                 st.write(f"**{loan['bank']}**")
             else:
-                st.write("⚠️ **Daten fehlen**")
+                st.write("**Daten fehlen**")
 
         for a in prominent:
-            badge = "🔴" if a["severity"] == "urgent" else "🟠"
-            st.markdown(f"{badge} **{a['title']}**")
+            if a["severity"] == "urgent":
+                st.error(f"**{a['title']}** — {a['detail']}")
+            else:
+                st.warning(f"**{a['title']}** — {a['detail']}")
 
         if other:
             label_noun = "Hinweis" if len(other) == 1 else "Hinweise"
-            with st.expander(f"ℹ️ {len(other)} weitere{'' if len(other) == 1 else ''} {label_noun}", expanded=False):
+            with st.expander(
+                f"{len(other)} weiterer {label_noun}"
+                if len(other) == 1
+                else f"{len(other)} weitere {label_noun}",
+                expanded=False,
+            ):
                 for a in other:
                     st.markdown(f"**{a['title']}**  \n{a['detail']}")
 
@@ -126,14 +118,14 @@ st.divider()
 
 if sold:
     st.divider()
-    st.subheader("🏆 Veräußerte Wohnungen")
-    st.caption("Trophäen-Sammlung: realisierte Erlöse aus Verkäufen.")
+    st.subheader("Veräußerte Wohnungen")
+    st.caption("Realisierte Erlöse aus Verkäufen.")
     for p in sold:
         loan = get_loan(p["property_id"])
         rr = realized_return(p, loan)
         with st.container(border=True):
             if st.button(
-                f"🏆  {p['address']}",
+                p["address"],
                 key=f"sold_{p['property_id']}",
                 type="tertiary",
                 use_container_width=True,
@@ -168,7 +160,22 @@ if sold:
                 else:
                     st.write("—")
             if rr and rr["spek_frist_passed"]:
-                st.markdown("🟢 **Spekulationsfrist bestanden** — Verkaufsgewinn steuerfrei")
+                st.info("**Spekulationsfrist bestanden** — Veräußerungsgewinn steuerfrei.")
+
+st.divider()
+
+with st.container(border=True):
+    if st.button(
+        "Szenario-Rechner — IRR, Exit-Preis, Was-wäre-wenn",
+        key="open_szenario",
+        type="tertiary",
+        use_container_width=True,
+    ):
+        st.switch_page("views/szenario.py")
+    st.caption(
+        "Spiele mit Haltedauer, Wertsteigerung und Anschlusszins für eine oder "
+        "alle Wohnungen. Berechnet IRR und Exit-Eigenkapital wie ein Analyst-Report."
+    )
 
 st.divider()
 
@@ -320,7 +327,7 @@ else:
     csv_text = "\n".join(csv_lines)
 
     st.download_button(
-        label=f"📥 Anlage-V-Daten {selected_year} als CSV herunterladen",
+        label=f"Anlage-V-Daten {selected_year} als CSV herunterladen",
         data=("﻿" + csv_text).encode("utf-8"),
         file_name=f"portivo_anlage_v_{selected_year}.csv",
         mime="text/csv",

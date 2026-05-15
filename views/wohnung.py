@@ -237,9 +237,9 @@ st.caption(p["property_id"])
 if is_sold(p):
     rr = realized_return(p, loan)
     st.success(
-        f"🏆 **Verkauft am {german_date(p['verkaufs_datum'])}**"
+        f"**Verkauft am {german_date(p['verkaufs_datum'])}**"
         if p.get("verkaufs_datum")
-        else "🏆 **Verkauft**"
+        else "**Verkauft**"
     )
     if rr is not None:
         k1, k2, k3, k4 = st.columns(4)
@@ -256,12 +256,12 @@ if is_sold(p):
 
         if rr["spek_frist_passed"]:
             st.info(
-                f"🟢 **Spekulationsfrist bestanden** — Veräußerungsgewinn "
+                f"**Spekulationsfrist bestanden** — Veräußerungsgewinn "
                 f"von {euro(rr['veraeusserungsgewinn'])} steuerfrei."
             )
         else:
             st.warning(
-                f"🟠 **Spekulationsfrist nicht erreicht** — Veräußerungsgewinn "
+                f"**Spekulationsfrist nicht erreicht** — Veräußerungsgewinn "
                 f"von {euro(rr['veraeusserungsgewinn'])} unterliegt der "
                 f"Einkommensteuer (kein Privileg nach § 23 EStG)."
             )
@@ -407,7 +407,7 @@ if edit_mode:
         st.divider()
         save_col, cancel_col = st.columns(2)
         with save_col:
-            save_clicked = st.form_submit_button("💾 Speichern", type="primary")
+            save_clicked = st.form_submit_button("Speichern", type="primary")
         with cancel_col:
             cancel_clicked = st.form_submit_button("Abbrechen")
 
@@ -487,7 +487,7 @@ if edit_mode:
         st.rerun()
 
 else:
-    if st.button("✏️ Bearbeiten"):
+    if st.button("Bearbeiten"):
         st.session_state[edit_mode_key] = True
         st.rerun()
 
@@ -755,5 +755,5 @@ else:
                 )
 
     st.divider()
-    with st.expander("📊 Analytik & Diagramme", expanded=False):
+    with st.expander("Analytik & Diagramme", expanded=False):
         _render_analytics(p, loan, total_acq)
