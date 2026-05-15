@@ -143,6 +143,14 @@ def gesamtrendite_components(
 
 
 def current_restschuld(loan, purchase_date_iso, today=None):
+    if not loan or not loan.get("darlehenssumme"):
+        return 0
+    if loan.get("restschuld_current") is not None:
+        return float(loan["restschuld_current"])
+    return projected_restschuld(loan, purchase_date_iso, today=today)
+
+
+def projected_restschuld(loan, purchase_date_iso, today=None):
     from datetime import date as _date
 
     if not loan or not loan.get("darlehenssumme"):
@@ -174,6 +182,10 @@ def current_restschuld(loan, purchase_date_iso, today=None):
         closing = schedule[full_years]["closing_balance"]
 
     return max(0, opening - fraction * (opening - closing))
+
+
+def restschuld_is_projection(loan):
+    return not (loan and loan.get("restschuld_current") is not None)
 
 
 def cashflow_at_new_rate(

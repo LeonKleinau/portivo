@@ -12,6 +12,8 @@ from calculations import (
     gesamtrendite_components,
     gross_yield,
     net_yield,
+    projected_restschuld,
+    restschuld_is_projection,
     tax_summary,
     true_total_return,
 )
@@ -221,6 +223,35 @@ def test_ber001_current_restschuld_matches_excel():
     loan = {"darlehenssumme": 336_000, "zinssatz_pct": 1.5, "tilgung_anfang_pct": 2.0}
     val = current_restschuld(loan, "2019-06-15", today=date(2026, 5, 15))
     assert 287_000 < val < 288_000
+
+
+def test_current_restschuld_prefers_user_override():
+    loan = {
+        "darlehenssumme": 336_000,
+        "zinssatz_pct": 1.5,
+        "tilgung_anfang_pct": 2.0,
+        "restschuld_current": 280_000,
+    }
+    val = current_restschuld(loan, "2019-06-15", today=date(2026, 5, 15))
+    assert val == 280_000
+
+
+def test_projected_restschuld_ignores_user_override():
+    loan = {
+        "darlehenssumme": 336_000,
+        "zinssatz_pct": 1.5,
+        "tilgung_anfang_pct": 2.0,
+        "restschuld_current": 280_000,
+    }
+    val = projected_restschuld(loan, "2019-06-15", today=date(2026, 5, 15))
+    assert 287_000 < val < 288_000
+
+
+def test_restschuld_is_projection_flag():
+    loan_proj = {"darlehenssumme": 100_000, "zinssatz_pct": 2.0, "tilgung_anfang_pct": 2.0}
+    loan_override = dict(loan_proj, restschuld_current=80_000)
+    assert restschuld_is_projection(loan_proj) is True
+    assert restschuld_is_projection(loan_override) is False
 
 
 # --- cashflow_at_new_rate ---

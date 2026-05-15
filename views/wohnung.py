@@ -12,6 +12,7 @@ from calculations import (
     gesamtrendite_components,
     gross_yield,
     net_yield,
+    restschuld_is_projection,
     true_total_return,
 )
 from engagement import all_alerts
@@ -296,6 +297,16 @@ if edit_mode:
                 value=format_german_number(loan_default.get("tilgung_anfang_pct", 2.0), 2),
                 help="z.B. 2,00",
             )
+            current_override = loan_default.get("restschuld_current")
+            new_restschuld_str = st.text_input(
+                "Restschuld laut Bank (optional)",
+                value=format_german_number(current_override) if current_override is not None else "",
+                help=(
+                    "Lasse leer, um die Restschuld automatisch aus dem Tilgungsplan "
+                    "zu projizieren. Trage den Wert vom letzten Bankauszug ein, "
+                    "wenn Du Sondertilgungen gemacht hast oder den exakten Stand kennst."
+                ),
+            )
 
         st.divider()
         st.markdown("##### Mietvertrag")
@@ -370,6 +381,10 @@ if edit_mode:
         tilgung = parse_or_error(new_tilgung_str, "Tilgung")
         nk_vorauszahlung = parse_or_error(new_nk_str, "NK-Vorauszahlung")
         kaution = parse_or_error(new_kaution_str, "Kaution")
+        if new_restschuld_str.strip():
+            restschuld_override = parse_or_error(new_restschuld_str, "Restschuld laut Bank")
+        else:
+            restschuld_override = None
 
         if errors:
             for e in errors:
@@ -398,19 +413,21 @@ if edit_mode:
             )
             if new_bank.strip() and darlehen and darlehen > 0:
                 existing_loan = get_loan(property_id) or {}
-                save_user_loan(
-                    property_id,
-                    {
-                        **existing_loan,
-                        "loan_id": existing_loan.get("loan_id", f"USER-{property_id}"),
-                        "property_id": property_id,
-                        "bank": new_bank.strip(),
-                        "darlehenssumme": int(round(darlehen)),
-                        "zinssatz_pct": float(zins),
-                        "zinsbindung_end": new_zinsbindung.strftime("%Y-%m-%d"),
-                        "tilgung_anfang_pct": float(tilgung),
-                    },
-                )
+                loan_dict = {
+                    **existing_loan,
+                    "loan_id": existing_loan.get("loan_id", f"USER-{property_id}"),
+                    "property_id": property_id,
+                    "bank": new_bank.strip(),
+                    "darlehenssumme": int(round(darlehen)),
+                    "zinssatz_pct": float(zins),
+                    "zinsbindung_end": new_zinsbindung.strftime("%Y-%m-%d"),
+                    "tilgung_anfang_pct": float(tilgung),
+                }
+                if restschuld_override is not None and restschuld_override > 0:
+                    loan_dict["restschuld_current"] = int(round(restschuld_override))
+                else:
+                    loan_dict.pop("restschuld_current", None)
+                save_user_loan(property_id, loan_dict)
             st.session_state[edit_mode_key] = False
             st.rerun()
 
@@ -503,7 +520,12 @@ else:
             stat("Zinssatz", percent(loan["zinssatz_pct"]))
             stat("Tilgung (anfänglich)", percent(loan["tilgung_anfang_pct"]))
             stat("Zinsbindung bis", german_date(loan["zinsbindung_end"]))
-            stat("Restschuld aktuell", euro(current_rest))
+            restschuld_label = (
+                "Restschuld (Projektion)"
+                if restschuld_is_projection(loan)
+                else "Restschuld (laut Bank)"
+            )
+            stat(restschuld_label, euro(current_rest))
             stat("Eigenkapital eingesetzt", euro(eigenkapital))
             stat(
                 "Cash-on-Cash",
