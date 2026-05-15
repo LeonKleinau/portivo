@@ -2,6 +2,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from calculations import cash_on_cash, gross_yield, net_yield
+from engagement import all_alerts
 from seed_portfolio import PORTFOLIO
 from utils import euro, german_date, get_loan, get_property, percent
 
@@ -49,6 +50,66 @@ row2 = st.columns(3)
 row2[0].metric("Bruttomietrendite (Ø)", percent(portfolio_brutto))
 row2[1].metric("Nettomietrendite (Ø)", percent(portfolio_netto))
 row2[2].metric("Cash-on-Cash (Ø)", percent(portfolio_coc))
+
+st.divider()
+
+all_property_alerts = []
+for p in resolved:
+    loan = get_loan(p["property_id"])
+    alerts = all_alerts(p, loan)
+    for alert in alerts:
+        all_property_alerts.append(
+            {
+                **alert,
+                "property_id": p["property_id"],
+                "property_address": p["address"],
+                "property_short": p["address"].split(",")[0],
+            }
+        )
+
+severity_order = {"urgent": 0, "warning": 1, "info": 2}
+all_property_alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
+
+n_urgent = sum(1 for a in all_property_alerts if a["severity"] == "urgent")
+n_warning = sum(1 for a in all_property_alerts if a["severity"] == "warning")
+n_info = sum(1 for a in all_property_alerts if a["severity"] == "info")
+
+st.subheader("Hinweise & Termine im Portfolio")
+if not all_property_alerts:
+    st.success("Keine offenen Hinweise im Portfolio.")
+else:
+    summary_parts = []
+    if n_urgent:
+        summary_parts.append(f"{n_urgent} dringend")
+    if n_warning:
+        summary_parts.append(f"{n_warning} Warnungen")
+    if n_info:
+        summary_parts.append(f"{n_info} Hinweise")
+    summary_text = " · ".join(summary_parts) if summary_parts else f"{len(all_property_alerts)} Einträge"
+    st.caption(f"{len(all_property_alerts)} offene Einträge: {summary_text}")
+
+    for a in all_property_alerts:
+        sev = a["severity"]
+        if sev == "urgent":
+            box = st.error
+            badge = "🔴"
+        elif sev == "warning":
+            box = st.warning
+            badge = "🟠"
+        else:
+            box = st.info
+            badge = "🔵"
+        box(
+            f"{badge} **{a['property_short']}** — {a['title']}\n\n{a['detail']}"
+        )
+        if st.button(
+            f"→ Zur Detailansicht ({a['property_short']})",
+            key=f"alert_nav_{a['property_id']}_{a['id']}",
+            type="tertiary",
+        ):
+            st.session_state["selected_property_id"] = a["property_id"]
+            st.query_params["property_id"] = a["property_id"]
+            st.switch_page("views/wohnung.py")
 
 st.divider()
 
