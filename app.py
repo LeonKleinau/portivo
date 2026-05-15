@@ -1,105 +1,20 @@
 import streamlit as st
 
-from seed_portfolio import PORTFOLIO, LOANS_BY_PROPERTY_ID
+from seed_portfolio import PORTFOLIO
 
 st.set_page_config(page_title="Portivo", layout="wide")
 
+pages = [st.Page("views/portfolio.py", title="Portfolio", default=True)]
 
-def euro(amount, decimals=0):
-    s = f"{amount:,.{decimals}f}"
-    return "€ " + s.replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def percent(value, decimals=2):
-    return f"{value:.{decimals}f} %".replace(".", ",")
-
-
-def german_date(iso):
-    y, m, d = iso.split("-")
-    return f"{d}.{m}.{y}"
-
-
-st.title("Portivo")
-st.caption("Portfolio-Übersicht")
-
-total_invested = sum(
-    p["purchase_price"] + p["kaufnebenkosten_total"] for p in PORTFOLIO
-)
-monthly_kaltmiete = sum(p["kaltmiete_monthly"] for p in PORTFOLIO)
-n_properties = len(PORTFOLIO)
-
-col1, col2, col3 = st.columns(3)
-col1.metric("Investiertes Kapital", euro(total_invested))
-col2.metric("Kaltmiete pro Monat", euro(monthly_kaltmiete))
-col3.metric("Wohnungen", n_properties)
-
-st.divider()
-
-display_rows = [
-    {
-        "Adresse": p["address"],
-        "Wohnfläche": f"{p['wohnflaeche_sqm']} m²",
-        "Kaufpreis": euro(p["purchase_price"]),
-        "Kaltmiete (mtl.)": euro(p["kaltmiete_monthly"]),
-        "Kaufdatum": german_date(p["purchase_date"]),
-    }
-    for p in PORTFOLIO
-]
-
-st.subheader("Wohnungen")
-st.caption("Wähle eine Wohnung für Details.")
-
-event = st.dataframe(
-    display_rows,
-    use_container_width=True,
-    hide_index=True,
-    on_select="rerun",
-    selection_mode="single-row",
-)
-
-selected = event.selection.rows if event and event.selection else []
-
-if selected:
-    p = PORTFOLIO[selected[0]]
-    loan = LOANS_BY_PROPERTY_ID.get(p["property_id"])
-
-    total_acq = p["purchase_price"] + p["kaufnebenkosten_total"]
-    rent_per_sqm = p["kaltmiete_monthly"] / p["wohnflaeche_sqm"]
-    price_per_sqm = p["purchase_price"] / p["wohnflaeche_sqm"]
-
-    st.divider()
-    st.subheader(f"Details — {p['address']}")
-
-    d1, d2, d3 = st.columns(3)
-
-    with d1:
-        st.markdown("**Stammdaten**")
-        st.write(f"**Adresse:** {p['address']}")
-        st.write(f"**Wohnfläche:** {p['wohnflaeche_sqm']} m²")
-        st.write(f"**Kaufdatum:** {german_date(p['purchase_date'])}")
-        st.write(f"**€/m² (Kaufpreis):** {euro(price_per_sqm, 2)}")
-        st.write(f"**€/m² (Kaltmiete):** {euro(rent_per_sqm, 2)}")
-
-    with d2:
-        st.markdown("**Wirtschaft**")
-        st.write(f"**Kaufpreis:** {euro(p['purchase_price'])}")
-        st.write(f"**Kaufnebenkosten:** {euro(p['kaufnebenkosten_total'])}")
-        st.write(f"**Gesamterwerbskosten:** {euro(total_acq)}")
-        st.write(f"**Kaltmiete (mtl.):** {euro(p['kaltmiete_monthly'])}")
-        st.write(f"**Bewirtschaftungskosten (mtl.):** {euro(p['opex_monthly_total'])}")
-
-    with d3:
-        st.markdown("**Finanzierung**")
-        if loan:
-            eigenkapital = total_acq - loan["darlehenssumme"]
-            st.write(f"**Bank:** {loan['bank']}")
-            st.write(f"**Darlehenssumme:** {euro(loan['darlehenssumme'])}")
-            st.write(f"**Zinssatz:** {percent(loan['zinssatz_pct'])}")
-            st.write(f"**Tilgung (anfänglich):** {percent(loan['tilgung_anfang_pct'])}")
-            st.write(f"**Zinsbindung bis:** {german_date(loan['zinsbindung_end'])}")
-            st.write(f"**Restschuld aktuell:** {euro(loan['restschuld_current'])}")
-            st.write(f"**Eigenkapital eingesetzt:** {euro(eigenkapital)}")
-        else:
-            st.write("Keine Finanzierungsdaten hinterlegt.")
+selected_id = st.query_params.get("property_id")
+if selected_id:
+    address = next(
+        (p["address"] for p in PORTFOLIO if p["property_id"] == selected_id),
+        "Wohnung",
+    )
+    pages.append(st.Page("views/wohnung.py", title=f"Wohnung — {address}"))
 else:
-    st.info("Klicke eine Zeile in der Tabelle, um Details zu sehen.")
+    pages.append(st.Page("views/wohnung.py", title="Wohnung"))
+
+nav = st.navigation(pages)
+nav.run()
