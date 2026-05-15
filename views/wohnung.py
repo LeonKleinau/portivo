@@ -480,48 +480,170 @@ else:
         st.divider()
         st.subheader("Cashflow-Sensitivität")
         st.caption(
-            f"Wie verändert sich der monatliche Cashflow nach Anschlussfinanzierung "
-            f"bei verschiedenen Zinssätzen? Annahme: Restschuld {euro(loan['restschuld_current'])} "
-            f"refinanziert, Tilgung bleibt bei {percent(loan['tilgung_anfang_pct'])}."
+            "Wie verändert sich der monatliche Cashflow nach Anschlussfinanzierung? "
+            "Zinssatz und Refi-Datum frei wählbar — die projizierte Restschuld wird "
+            "anhand des Tilgungsplans automatisch angepasst."
         )
 
-        rate_scenarios = [1.5, 2.0, 3.0, 4.0, 5.0]
-        rows = [
-            "| Zinssatz | Annuität (mtl.) | Cashflow (mtl.) |",
-            "|---|---|---|",
-        ]
-        for r in rate_scenarios:
-            monthly_annuity = (
-                loan["restschuld_current"] * (r + loan["tilgung_anfang_pct"]) / 100 / 12
+        sens_purchase_d = date.fromisoformat(p["purchase_date"])
+        sens_zb_d = date.fromisoformat(loan["zinsbindung_end"])
+        sens_min_date = max(date.today(), sens_purchase_d)
+        sens_max_date = date(
+            sens_purchase_d.year + 35,
+            sens_purchase_d.month,
+            sens_purchase_d.day,
+        )
+        sens_default_date = sens_zb_d if sens_min_date <= sens_zb_d <= sens_max_date else sens_min_date
+
+        ctrl_left, ctrl_right = st.columns(2)
+        with ctrl_left:
+            refi_date = st.date_input(
+                "Refinanzierung am",
+                value=sens_default_date,
+                min_value=sens_min_date,
+                max_value=sens_max_date,
+                key=f"refi_date_{property_id}",
             )
-            cf = cashflow_at_new_rate(
+        with ctrl_right:
+            new_rate = st.slider(
+                "Anschluss-Zinssatz",
+                min_value=0.0,
+                max_value=8.0,
+                value=3.8,
+                step=0.1,
+                format="%.2f %%",
+                key=f"refi_rate_{property_id}",
+            )
+
+        sens_schedule = amortisation_schedule(
+            loan["darlehenssumme"],
+            loan["zinssatz_pct"],
+            loan["tilgung_anfang_pct"],
+            years=40,
+        )
+        years_to_refi = (refi_date - sens_purchase_d).days / 365.25
+        year_idx = max(1, int(round(years_to_refi)))
+        if year_idx <= len(sens_schedule):
+            projected_rest = sens_schedule[year_idx - 1]["closing_balance"]
+        else:
+            projected_rest = 0
+
+        cf_at_slider = cashflow_at_new_rate(
+            p["kaltmiete_monthly"],
+            p["opex_monthly_total"],
+            projected_rest,
+            new_rate,
+            loan["tilgung_anfang_pct"],
+        )
+        breakeven = breakeven_rate_pct(
+            p["kaltmiete_monthly"],
+            p["opex_monthly_total"],
+            projected_rest,
+            loan["tilgung_anfang_pct"],
+        )
+
+        kpi_l, kpi_r = st.columns(2)
+        kpi_l.metric(
+            "Projizierte Restschuld bei Refi", euro(projected_rest)
+        )
+        kpi_r.metric(
+            f"Monatl. Cashflow @ {percent(new_rate)}",
+            euro(cf_at_slider),
+            delta=None,
+        )
+
+        rates_axis = [i * 0.1 for i in range(0, 81)]
+        cfs_axis = [
+            cashflow_at_new_rate(
                 p["kaltmiete_monthly"],
                 p["opex_monthly_total"],
-                loan["restschuld_current"],
+                projected_rest,
                 r,
                 loan["tilgung_anfang_pct"],
             )
-            indicator = "🟢" if cf >= 0 else "🔴"
-            rows.append(
-                f"| {percent(r)} | {euro(monthly_annuity)} | {indicator} {euro(cf)} |"
-            )
-        st.markdown("\n".join(rows))
+            for r in rates_axis
+        ]
 
-        be = breakeven_rate_pct(
-            p["kaltmiete_monthly"],
-            p["opex_monthly_total"],
-            loan["restschuld_current"],
-            loan["tilgung_anfang_pct"],
+        sens_fig = go.Figure()
+        sens_fig.add_trace(
+            go.Scatter(
+                x=rates_axis,
+                y=cfs_axis,
+                mode="lines",
+                line={"color": "#1976d2", "width": 3},
+                fill="tozeroy",
+                fillcolor="rgba(25, 118, 210, 0.10)",
+                hovertemplate="Zinssatz %{x:.2f} %<br>Cashflow € %{y:,.0f}<extra></extra>",
+                showlegend=False,
+            )
         )
-        if be is not None:
-            if be <= 0:
+        sens_fig.add_hline(y=0, line_color="#666", line_width=1)
+
+        sens_fig.add_vline(
+            x=loan["zinssatz_pct"],
+            line_dash="dot",
+            line_color="#999",
+            annotation_text=f"Aktuell {percent(loan['zinssatz_pct'])}",
+            annotation_position="bottom right",
+        )
+        sens_fig.add_vline(
+            x=3.8,
+            line_dash="dot",
+            line_color="#f44336",
+            annotation_text="Marktzins 3,80 %",
+            annotation_position="top left",
+        )
+        if breakeven is not None and 0 <= breakeven <= 8:
+            sens_fig.add_vline(
+                x=breakeven,
+                line_dash="dash",
+                line_color="#ff9800",
+                annotation_text=f"Break-Even {percent(breakeven)}",
+                annotation_position="top right",
+            )
+
+        dot_color = "#1b5e20" if cf_at_slider >= 0 else "#8b0000"
+        sens_fig.add_trace(
+            go.Scatter(
+                x=[new_rate],
+                y=[cf_at_slider],
+                mode="markers",
+                marker={
+                    "size": 16,
+                    "color": dot_color,
+                    "line": {"width": 2, "color": "white"},
+                },
+                showlegend=False,
+                hovertemplate=(
+                    f"Slider: {new_rate:.2f} %<br>"
+                    f"Cashflow € {cf_at_slider:,.0f}<extra></extra>"
+                ),
+            )
+        )
+        sens_fig.update_layout(
+            xaxis_title="Anschluss-Zinssatz (%)",
+            yaxis_title="Monatlicher Cashflow (€)",
+            height=420,
+            margin=dict(t=20, b=40, l=20, r=20),
+            showlegend=False,
+        )
+        st.plotly_chart(sens_fig, use_container_width=True)
+
+        if breakeven is not None:
+            if breakeven <= 0:
                 st.error(
-                    f"**Break-Even-Zinssatz: {percent(be)}** — bereits bei einem Zinssatz von 0 % "
-                    f"ist der Cashflow negativ. Operative Kosten oder Tilgung zehren die Miete auf."
+                    f"**Break-Even-Zinssatz: {percent(breakeven)}** — selbst bei einem Zinssatz "
+                    f"von 0 % ist der Cashflow negativ; operative Kosten und Tilgung "
+                    f"zehren die Miete auf."
+                )
+            elif breakeven < loan["zinssatz_pct"]:
+                st.warning(
+                    f"**Break-Even-Zinssatz: {percent(breakeven)}** — bereits unter dem aktuellen "
+                    f"Zinssatz; das Objekt arbeitet schon heute mit negativem Cashflow."
                 )
             else:
-                st.warning(
-                    f"**Break-Even-Zinssatz: {percent(be)}** — oberhalb dieses Zinssatzes "
+                st.info(
+                    f"**Break-Even-Zinssatz: {percent(breakeven)}** — oberhalb dieses Werts "
                     f"wird der monatliche Cashflow negativ."
                 )
 
