@@ -4,9 +4,11 @@ import streamlit as st
 
 from utils import (
     euro,
+    format_german_number,
     german_date,
     get_loan,
     get_property,
+    parse_german_number,
     percent,
     save_user_loan,
     save_user_property,
@@ -37,16 +39,19 @@ st.title(p["address"])
 st.caption(p["property_id"])
 
 if edit_mode:
+    st.caption(
+        "Zahlen können im deutschen Format eingegeben werden: 200.000 für Tausender, 1,50 für Dezimalwerte."
+    )
+
     with st.form(key=f"edit_form_{property_id}"):
         c1, c2, c3 = st.columns(3)
 
         with c1:
             st.markdown("**Stammdaten**")
             new_address = st.text_input("Adresse", value=p["address"])
-            new_wohnflaeche = st.number_input(
+            new_wohnflaeche_str = st.text_input(
                 "Wohnfläche (m²)",
-                min_value=1,
-                value=int(p["wohnflaeche_sqm"]),
+                value=format_german_number(p["wohnflaeche_sqm"]),
             )
             new_purchase_date = st.date_input(
                 "Kaufdatum", value=date.fromisoformat(p["purchase_date"])
@@ -54,48 +59,38 @@ if edit_mode:
 
         with c2:
             st.markdown("**Wirtschaft**")
-            new_purchase_price = st.number_input(
+            new_purchase_price_str = st.text_input(
                 "Kaufpreis (€)",
-                min_value=0,
-                value=int(p["purchase_price"]),
-                step=1000,
+                value=format_german_number(p["purchase_price"]),
+                help="z.B. 420.000",
             )
-            new_kaufnebenkosten = st.number_input(
+            new_kaufnebenkosten_str = st.text_input(
                 "Kaufnebenkosten (€)",
-                min_value=0,
-                value=int(p["kaufnebenkosten_total"]),
-                step=500,
+                value=format_german_number(p["kaufnebenkosten_total"]),
+                help="z.B. 42.000",
             )
-            new_kaltmiete = st.number_input(
+            new_kaltmiete_str = st.text_input(
                 "Kaltmiete (mtl., €)",
-                min_value=0,
-                value=int(p["kaltmiete_monthly"]),
-                step=10,
+                value=format_german_number(p["kaltmiete_monthly"]),
             )
-            new_opex = st.number_input(
+            new_opex_str = st.text_input(
                 "Bewirtschaftung (mtl., €)",
-                min_value=0,
-                value=int(p["opex_monthly_total"]),
-                step=10,
+                value=format_german_number(p["opex_monthly_total"]),
             )
 
         with c3:
             st.markdown("**Finanzierung**")
             loan_default = loan or {}
             new_bank = st.text_input("Bank", value=loan_default.get("bank", ""))
-            new_darlehen = st.number_input(
+            new_darlehen_str = st.text_input(
                 "Darlehenssumme (€)",
-                min_value=0,
-                value=int(loan_default.get("darlehenssumme", 0)),
-                step=1000,
+                value=format_german_number(loan_default.get("darlehenssumme", 0)),
+                help="z.B. 336.000",
             )
-            new_zins = st.number_input(
+            new_zins_str = st.text_input(
                 "Zinssatz (%)",
-                min_value=0.0,
-                max_value=20.0,
-                step=0.1,
-                value=float(loan_default.get("zinssatz_pct", 2.0)),
-                format="%.2f",
+                value=format_german_number(loan_default.get("zinssatz_pct", 2.0), 2),
+                help="z.B. 1,50",
             )
             zb_default = (
                 date.fromisoformat(loan_default["zinsbindung_end"])
@@ -103,19 +98,14 @@ if edit_mode:
                 else date(date.today().year + 10, 1, 1)
             )
             new_zinsbindung = st.date_input("Zinsbindung bis", value=zb_default)
-            new_tilgung = st.number_input(
+            new_tilgung_str = st.text_input(
                 "Tilgung (%, anfänglich)",
-                min_value=0.0,
-                max_value=10.0,
-                step=0.1,
-                value=float(loan_default.get("tilgung_anfang_pct", 2.0)),
-                format="%.2f",
+                value=format_german_number(loan_default.get("tilgung_anfang_pct", 2.0), 2),
+                help="z.B. 2,00",
             )
-            new_restschuld = st.number_input(
+            new_restschuld_str = st.text_input(
                 "Restschuld aktuell (€)",
-                min_value=0,
-                value=int(loan_default.get("restschuld_current", 0)),
-                step=1000,
+                value=format_german_number(loan_default.get("restschuld_current", 0)),
             )
 
         st.divider()
@@ -126,34 +116,55 @@ if edit_mode:
             cancel_clicked = st.form_submit_button("Abbrechen")
 
     if save_clicked:
+        errors = []
         if not new_address.strip():
-            st.error("Adresse darf nicht leer sein.")
+            errors.append("Adresse darf nicht leer sein.")
+
+        def parse_or_error(text, label):
+            v = parse_german_number(text)
+            if v is None:
+                errors.append(f"{label} ist keine gültige Zahl.")
+            return v
+
+        wohnflaeche = parse_or_error(new_wohnflaeche_str, "Wohnfläche")
+        purchase_price = parse_or_error(new_purchase_price_str, "Kaufpreis")
+        kaufnebenkosten = parse_or_error(new_kaufnebenkosten_str, "Kaufnebenkosten")
+        kaltmiete = parse_or_error(new_kaltmiete_str, "Kaltmiete")
+        opex = parse_or_error(new_opex_str, "Bewirtschaftung")
+        darlehen = parse_or_error(new_darlehen_str, "Darlehenssumme")
+        zins = parse_or_error(new_zins_str, "Zinssatz")
+        tilgung = parse_or_error(new_tilgung_str, "Tilgung")
+        restschuld = parse_or_error(new_restschuld_str, "Restschuld")
+
+        if errors:
+            for e in errors:
+                st.error(e)
         else:
             save_user_property(
                 property_id,
                 {
                     "property_id": property_id,
                     "address": new_address.strip(),
-                    "purchase_price": new_purchase_price,
-                    "kaufnebenkosten_total": new_kaufnebenkosten,
+                    "purchase_price": int(round(purchase_price)),
+                    "kaufnebenkosten_total": int(round(kaufnebenkosten)),
                     "purchase_date": new_purchase_date.strftime("%Y-%m-%d"),
-                    "kaltmiete_monthly": new_kaltmiete,
-                    "opex_monthly_total": new_opex,
-                    "wohnflaeche_sqm": new_wohnflaeche,
+                    "kaltmiete_monthly": int(round(kaltmiete)),
+                    "opex_monthly_total": int(round(opex)),
+                    "wohnflaeche_sqm": int(round(wohnflaeche)),
                 },
             )
-            if new_bank.strip() and new_darlehen > 0:
+            if new_bank.strip() and darlehen and darlehen > 0:
                 save_user_loan(
                     property_id,
                     {
                         "loan_id": f"USER-{property_id}",
                         "property_id": property_id,
                         "bank": new_bank.strip(),
-                        "darlehenssumme": new_darlehen,
-                        "zinssatz_pct": new_zins,
+                        "darlehenssumme": int(round(darlehen)),
+                        "zinssatz_pct": float(zins),
                         "zinsbindung_end": new_zinsbindung.strftime("%Y-%m-%d"),
-                        "tilgung_anfang_pct": new_tilgung,
-                        "restschuld_current": new_restschuld,
+                        "tilgung_anfang_pct": float(tilgung),
+                        "restschuld_current": int(round(restschuld)),
                     },
                 )
             st.session_state[edit_mode_key] = False

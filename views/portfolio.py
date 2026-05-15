@@ -21,36 +21,38 @@ col3.metric("Wohnungen", n_properties)
 
 st.divider()
 
-display_rows = []
+st.subheader("Wohnungen")
+st.caption("Klicke auf eine Adresse, um zur Detailansicht zu wechseln.")
+
 for p in resolved:
     loan = get_loan(p["property_id"])
-    finanzierung_label = loan["bank"] if loan else "⚠️ Daten fehlen"
-    display_rows.append(
-        {
-            "Adresse": p["address"],
-            "Wohnfläche": f"{p['wohnflaeche_sqm']} m²",
-            "Kaufpreis": euro(p["purchase_price"]),
-            "Kaltmiete (mtl.)": euro(p["kaltmiete_monthly"]),
-            "Kaufdatum": german_date(p["purchase_date"]),
-            "Finanzierung": finanzierung_label,
-        }
-    )
+    with st.container(border=True):
+        if st.button(
+            p["address"],
+            key=f"open_{p['property_id']}",
+            type="tertiary",
+            use_container_width=True,
+        ):
+            st.session_state["selected_property_id"] = p["property_id"]
+            st.query_params["property_id"] = p["property_id"]
+            st.switch_page("views/wohnung.py")
 
-st.subheader("Wohnungen")
-st.caption("Wähle eine Wohnung, um zur Detailansicht zu wechseln.")
-
-event = st.dataframe(
-    display_rows,
-    use_container_width=True,
-    hide_index=True,
-    on_select="rerun",
-    selection_mode="single-row",
-)
-
-selected = event.selection.rows if event and event.selection else []
-
-if selected:
-    selected_id = resolved[selected[0]]["property_id"]
-    st.session_state["selected_property_id"] = selected_id
-    st.query_params["property_id"] = selected_id
-    st.switch_page("views/wohnung.py")
+        cols = st.columns(5)
+        with cols[0]:
+            st.caption("Wohnfläche")
+            st.write(f"**{p['wohnflaeche_sqm']} m²**")
+        with cols[1]:
+            st.caption("Kaufdatum")
+            st.write(f"**{german_date(p['purchase_date'])}**")
+        with cols[2]:
+            st.caption("Kaufpreis")
+            st.write(f"**{euro(p['purchase_price'])}**")
+        with cols[3]:
+            st.caption("Kaltmiete (mtl.)")
+            st.write(f"**{euro(p['kaltmiete_monthly'])}**")
+        with cols[4]:
+            st.caption("Finanzierung")
+            if loan:
+                st.write(f"**{loan['bank']}**")
+            else:
+                st.write("⚠️ **Daten fehlen**")
