@@ -1,6 +1,14 @@
 import pytest
 
-from calculations import gross_yield, net_yield
+from calculations import (
+    cash_on_cash,
+    gross_yield,
+    net_yield,
+    true_total_return,
+)
+
+
+# --- gross_yield ---
 
 
 def test_gross_yield_basic():
@@ -15,6 +23,9 @@ def test_gross_yield_negative_price_safe():
     assert gross_yield(10_000, -1) == 0.0
 
 
+# --- net_yield ---
+
+
 def test_net_yield_basic():
     assert net_yield(12_000, 2_000, 330_000) == pytest.approx(
         10_000 / 330_000 * 100
@@ -25,6 +36,73 @@ def test_net_yield_zero_acquisition_safe():
     assert net_yield(10_000, 1_000, 0) == 0.0
 
 
+# --- cash_on_cash ---
+
+
+def test_cash_on_cash_basic():
+    # 10k - 2k - 5k = 3k cashflow / 100k EK = 3 %
+    assert cash_on_cash(10_000, 2_000, 5_000, 100_000) == pytest.approx(3.0)
+
+
+def test_cash_on_cash_zero_equity_safe():
+    assert cash_on_cash(10_000, 1_000, 5_000, 0) == 0.0
+
+
+def test_cash_on_cash_can_be_negative():
+    # rent below opex + debt → negative cashflow → negative return
+    assert cash_on_cash(10_000, 5_000, 8_000, 50_000) == pytest.approx(-6.0)
+
+
+def test_cash_on_cash_no_debt():
+    # Without debt service, cash-on-cash collapses to net yield (using EK as denominator)
+    assert cash_on_cash(10_000, 2_000, 0, 100_000) == pytest.approx(8.0)
+
+
+# --- true_total_return ---
+
+
+def test_true_total_return_basic():
+    # cashflow=3000, tilgung=4000, knk=20000/10y=2000/y
+    # numerator = 3000 + 4000 - 2000 = 5000
+    # / 100000 EK = 5 %
+    result = true_total_return(
+        annual_rent=10_000,
+        annual_opex=2_000,
+        annual_debt_service=5_000,
+        annual_tilgung=4_000,
+        kaufnebenkosten=20_000,
+        eigenkapital=100_000,
+        holding_period_years=10,
+    )
+    assert result == pytest.approx(5.0)
+
+
+def test_true_total_return_zero_equity_safe():
+    result = true_total_return(
+        annual_rent=10_000,
+        annual_opex=2_000,
+        annual_debt_service=5_000,
+        annual_tilgung=4_000,
+        kaufnebenkosten=20_000,
+        eigenkapital=0,
+        holding_period_years=10,
+    )
+    assert result == 0.0
+
+
+def test_true_total_return_zero_holding_period_safe():
+    result = true_total_return(
+        annual_rent=10_000,
+        annual_opex=2_000,
+        annual_debt_service=5_000,
+        annual_tilgung=4_000,
+        kaufnebenkosten=20_000,
+        eigenkapital=100_000,
+        holding_period_years=0,
+    )
+    assert result == 0.0
+
+
 # --- Excel reconciliation against seed data ---
 #
 # BER-001 (Schönhauser Allee 12):
@@ -33,9 +111,18 @@ def test_net_yield_zero_acquisition_safe():
 #   gesamterwerb            = 462,000
 #   kaltmiete_monthly       =     910  ->  annual = 10,920
 #   opex_monthly_total      =     180  ->  annual =  2,160
+#   loan.darlehenssumme     = 336,000
+#   loan.zinssatz_pct       =     1.5
+#   loan.tilgung_anfang_pct =     2.0
+#   annual_debt_service     = 336,000 × 3.5 % = 11,760
+#   annual_tilgung_y1       = 336,000 × 2.0 % =  6,720
+#   eigenkapital            = 462,000 - 336,000 = 126,000
+#   knk_amortised (10y)     =  42,000 / 10     =  4,200
 #
-#   Bruttomietrendite = 10,920 / 420,000 = 2.60000 %
-#   Nettomietrendite  = (10,920 - 2,160) / 462,000 = 8,760 / 462,000 = 1.89610 %
+#   Brutto             = 10,920 / 420,000           = 2.6000 %
+#   Netto              = (10,920 - 2,160) / 462,000 = 1.8961 %
+#   Cash-on-Cash       = (10,920 - 2,160 - 11,760) / 126,000 = -3,000 / 126,000 = -2.3810 %
+#   Gesamtrendite      = (-3,000 + 6,720 - 4,200) / 126,000  =   -480 / 126,000 = -0.3810 %
 
 
 def test_ber001_gross_yield_matches_excel():
@@ -51,3 +138,26 @@ def test_ber001_net_yield_matches_excel():
     assert net_yield(annual_rent, annual_opex, total_acq) == pytest.approx(
         expected, abs=1e-6
     )
+
+
+def test_ber001_cash_on_cash_matches_excel():
+    coc = cash_on_cash(
+        annual_rent=910 * 12,
+        annual_opex=180 * 12,
+        annual_debt_service=11_760,
+        eigenkapital=126_000,
+    )
+    assert coc == pytest.approx(-3_000 / 126_000 * 100, abs=1e-6)
+
+
+def test_ber001_true_total_return_matches_excel():
+    ttr = true_total_return(
+        annual_rent=910 * 12,
+        annual_opex=180 * 12,
+        annual_debt_service=11_760,
+        annual_tilgung=6_720,
+        kaufnebenkosten=42_000,
+        eigenkapital=126_000,
+        holding_period_years=10,
+    )
+    assert ttr == pytest.approx(-480 / 126_000 * 100, abs=1e-6)

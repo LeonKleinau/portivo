@@ -2,7 +2,7 @@ from datetime import date
 
 import streamlit as st
 
-from calculations import gross_yield, net_yield
+from calculations import cash_on_cash, gross_yield, net_yield, true_total_return
 from utils import (
     euro,
     format_german_number,
@@ -213,8 +213,17 @@ else:
 
     with d3:
         st.markdown("**Finanzierung**")
+        annual_rent = p["kaltmiete_monthly"] * 12
+        annual_opex = p["opex_monthly_total"] * 12
         if loan:
             eigenkapital = total_acq - loan["darlehenssumme"]
+            annual_debt = (
+                loan["darlehenssumme"]
+                * (loan["zinssatz_pct"] + loan["tilgung_anfang_pct"])
+                / 100
+            )
+            annual_tilgung = loan["darlehenssumme"] * loan["tilgung_anfang_pct"] / 100
+
             st.write(f"**Bank:** {loan['bank']}")
             st.write(f"**Darlehenssumme:** {euro(loan['darlehenssumme'])}")
             st.write(f"**Zinssatz:** {percent(loan['zinssatz_pct'])}")
@@ -222,5 +231,22 @@ else:
             st.write(f"**Zinsbindung bis:** {german_date(loan['zinsbindung_end'])}")
             st.write(f"**Restschuld aktuell:** {euro(loan['restschuld_current'])}")
             st.write(f"**Eigenkapital eingesetzt:** {euro(eigenkapital)}")
+            st.write(
+                f"**Cash-on-Cash:** {percent(cash_on_cash(annual_rent, annual_opex, annual_debt, eigenkapital))}"
+            )
+            st.write(
+                f"**Gesamtrendite:** {percent(true_total_return(annual_rent, annual_opex, annual_debt, annual_tilgung, p['kaufnebenkosten_total'], eigenkapital))}"
+            )
+            st.caption(
+                "Gesamtrendite: ohne Wertsteigerung, KNK über 10 Jahre amortisiert, Tilgung als Eigenkapitalaufbau."
+            )
         else:
-            st.info("Keine Finanzierungsdaten hinterlegt. Klicke oben auf Bearbeiten, um sie zu erfassen.")
+            st.info(
+                "Keine Finanzierungsdaten hinterlegt. Klicke oben auf Bearbeiten, um sie zu erfassen."
+            )
+            st.write(
+                f"**Cash-on-Cash (ohne Finanzierung):** {percent(cash_on_cash(annual_rent, annual_opex, 0, total_acq))}"
+            )
+            st.write(
+                f"**Gesamtrendite (ohne Finanzierung):** {percent(true_total_return(annual_rent, annual_opex, 0, 0, p['kaufnebenkosten_total'], total_acq))}"
+            )
