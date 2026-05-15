@@ -142,6 +142,56 @@ def mietspiegel_alert(prop):
     }
 
 
+def spekulationsfrist_alert(prop, today=None):
+    if not prop.get("purchase_date"):
+        return None
+    today = today or date.today()
+    purchase = date.fromisoformat(prop["purchase_date"])
+    spek_end = date(purchase.year + 10, purchase.month, purchase.day)
+    days_diff = (spek_end - today).days
+
+    if days_diff < -365:
+        return None
+
+    if days_diff < 0:
+        return {
+            "id": "spekulationsfrist_open",
+            "title": "Spekulationsfrist abgelaufen — steuerfreier Verkauf möglich",
+            "severity": "info",
+            "detail": (
+                f"10-Jahres-Frist erreicht am {spek_end.strftime('%d.%m.%Y')}. "
+                f"Bei Vermietungsobjekten ist ein Verkauf seitdem ohne "
+                f"Veräußerungsgewinnbesteuerung möglich. Verkaufsstrategie prüfen, falls relevant."
+            ),
+        }
+
+    months_left = _months_between(today, spek_end)
+    if months_left > 24:
+        return None
+
+    if months_left <= 6:
+        severity = "warning"
+        title_suffix = "Verkaufsstrategie prüfen"
+    elif months_left <= 12:
+        severity = "info"
+        title_suffix = "steuerfreier Verkauf bald möglich"
+    else:
+        severity = "info"
+        title_suffix = "Vorbereitung auf Verkaufsmöglichkeit"
+
+    return {
+        "id": "spekulationsfrist",
+        "title": f"Spekulationsfrist in {months_left} Monaten — {title_suffix}",
+        "severity": severity,
+        "months_left": months_left,
+        "detail": (
+            f"10-Jahres-Frist endet am {spek_end.strftime('%d.%m.%Y')}. "
+            f"Danach ist ein Verkauf ohne Veräußerungsgewinnbesteuerung möglich "
+            f"(bei Vermietung; bei Eigennutzung gelten andere Regeln)."
+        ),
+    }
+
+
 def all_alerts(prop, loan, today=None):
     alerts = []
     pa = prolongation_alert(loan, today=today)
@@ -151,6 +201,9 @@ def all_alerts(prop, loan, today=None):
     ms = mietspiegel_alert(prop)
     if ms:
         alerts.append(ms)
+    sa = spekulationsfrist_alert(prop, today=today)
+    if sa:
+        alerts.append(sa)
     severity_order = {"urgent": 0, "warning": 1, "info": 2}
     alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
     return alerts

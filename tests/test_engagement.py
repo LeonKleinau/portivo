@@ -8,6 +8,7 @@ from engagement import (
     geg_alerts,
     mietspiegel_alert,
     prolongation_alert,
+    spekulationsfrist_alert,
 )
 
 
@@ -157,6 +158,61 @@ def test_mietspiegel_alert_triggers_above_5_pct_gap():
     assert alert is not None
     assert alert["gap_pct"] == pytest.approx(2 / 14 * 100, abs=0.01)
     assert alert["monthly_uplift_potential"] == pytest.approx(100, abs=0.01)
+
+
+# --- spekulationsfrist_alert ---
+
+
+def test_spekulationsfrist_none_when_no_purchase_date():
+    assert spekulationsfrist_alert({}, today=date(2026, 5, 15)) is None
+
+
+def test_spekulationsfrist_none_when_far_in_future():
+    # Purchased 2022-09-08, Spek-Ende 2032-09-08, today 2026-05-15 → ~76 months. No alert.
+    prop = {"purchase_date": "2022-09-08"}
+    assert spekulationsfrist_alert(prop, today=date(2026, 5, 15)) is None
+
+
+def test_spekulationsfrist_info_low_priority_at_18_months():
+    # Purchased 2017-11-20, Spek-Ende 2027-11-20, today 2026-05-20 → 18 months.
+    prop = {"purchase_date": "2017-11-20"}
+    alert = spekulationsfrist_alert(prop, today=date(2026, 5, 20))
+    assert alert is not None
+    assert alert["severity"] == "info"
+    assert alert["months_left"] == 18
+
+
+def test_spekulationsfrist_info_at_12_months():
+    # 12 months remaining → info, "bald möglich"
+    prop = {"purchase_date": "2017-11-20"}
+    alert = spekulationsfrist_alert(prop, today=date(2026, 11, 20))
+    assert alert is not None
+    assert alert["severity"] == "info"
+    assert "bald möglich" in alert["title"]
+
+
+def test_spekulationsfrist_warning_within_6_months():
+    # ≤ 6 months → warning
+    prop = {"purchase_date": "2017-11-20"}
+    alert = spekulationsfrist_alert(prop, today=date(2027, 6, 20))
+    assert alert is not None
+    assert alert["severity"] == "warning"
+    assert alert["months_left"] == 5
+
+
+def test_spekulationsfrist_positive_after_window_opens():
+    # Just past Spek-Ende → info ("steuerfrei seit ...")
+    prop = {"purchase_date": "2017-11-20"}
+    alert = spekulationsfrist_alert(prop, today=date(2027, 12, 15))
+    assert alert is not None
+    assert alert["id"] == "spekulationsfrist_open"
+    assert alert["severity"] == "info"
+
+
+def test_spekulationsfrist_none_when_more_than_year_past():
+    # > 12 months past → no alert
+    prop = {"purchase_date": "2015-01-01"}
+    assert spekulationsfrist_alert(prop, today=date(2026, 5, 15)) is None
 
 
 # --- all_alerts integration ---
