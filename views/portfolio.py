@@ -45,5 +45,6 @@ selected = event.selection.rows if event and event.selection else []
 
 if selected:
     selected_id = PORTFOLIO[selected[0]]["property_id"]
+    st.session_state["selected_property_id"] = selected_id
     st.query_params["property_id"] = selected_id
     st.switch_page("views/wohnung.py")

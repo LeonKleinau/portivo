@@ -4,10 +4,13 @@ from seed_portfolio import PORTFOLIO, LOANS_BY_PROPERTY_ID
 from utils import euro, german_date, percent
 
 if st.button("← Zurück zum Portfolio"):
+    st.session_state.pop("selected_property_id", None)
     st.query_params.clear()
     st.switch_page("views/portfolio.py")
 
-property_id = st.query_params.get("property_id")
+property_id = st.session_state.get("selected_property_id") or st.query_params.get(
+    "property_id"
+)
 if not property_id:
     st.warning("Keine Wohnung ausgewählt.")
     st.stop()
