@@ -2,6 +2,7 @@ from datetime import date
 
 import streamlit as st
 
+from calculations import gross_yield, net_yield
 from utils import (
     euro,
     format_german_number,
@@ -200,6 +201,15 @@ else:
         st.write(f"**Gesamterwerbskosten:** {euro(total_acq)}")
         st.write(f"**Kaltmiete (mtl.):** {euro(p['kaltmiete_monthly'])}")
         st.write(f"**Bewirtschaftungskosten (mtl.):** {euro(p['opex_monthly_total'])}")
+
+        annual_rent = p["kaltmiete_monthly"] * 12
+        annual_opex = p["opex_monthly_total"] * 12
+        st.write(
+            f"**Bruttomietrendite:** {percent(gross_yield(annual_rent, p['purchase_price']))}"
+        )
+        st.write(
+            f"**Nettomietrendite:** {percent(net_yield(annual_rent, annual_opex, total_acq))}"
+        )
 
     with d3:
         st.markdown("**Finanzierung**")
