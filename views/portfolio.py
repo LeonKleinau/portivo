@@ -55,63 +55,55 @@ row2[2].metric("Cash-on-Cash (Ø)", percent(portfolio_coc))
 
 st.divider()
 
-all_property_alerts = []
+st.subheader("Wohnungen")
+st.caption("Klicke auf eine Adresse, um zur Detailansicht zu wechseln.")
+
 for p in resolved:
     loan = get_loan(p["property_id"])
     alerts = all_alerts(p, loan)
-    for alert in alerts:
-        all_property_alerts.append(
-            {
-                **alert,
-                "property_id": p["property_id"],
-                "property_address": p["address"],
-                "property_short": p["address"].split(",")[0],
-            }
-        )
+    prominent = [a for a in alerts if a["severity"] in ("urgent", "warning")]
+    other = [a for a in alerts if a["severity"] == "info"]
 
-severity_order = {"urgent": 0, "warning": 1, "info": 2}
-all_property_alerts.sort(key=lambda a: severity_order.get(a["severity"], 99))
-
-n_urgent = sum(1 for a in all_property_alerts if a["severity"] == "urgent")
-n_warning = sum(1 for a in all_property_alerts if a["severity"] == "warning")
-n_info = sum(1 for a in all_property_alerts if a["severity"] == "info")
-
-st.subheader("Hinweise & Termine im Portfolio")
-if not all_property_alerts:
-    st.success("Keine offenen Hinweise im Portfolio.")
-else:
-    summary_parts = []
-    if n_urgent:
-        summary_parts.append(f"{n_urgent} dringend")
-    if n_warning:
-        summary_parts.append(f"{n_warning} Warnungen")
-    if n_info:
-        summary_parts.append(f"{n_info} Hinweise")
-    summary_text = " · ".join(summary_parts) if summary_parts else f"{len(all_property_alerts)} Einträge"
-    st.caption(f"{len(all_property_alerts)} offene Einträge: {summary_text}")
-
-    for a in all_property_alerts:
-        sev = a["severity"]
-        if sev == "urgent":
-            box = st.error
-            badge = "🔴"
-        elif sev == "warning":
-            box = st.warning
-            badge = "🟠"
-        else:
-            box = st.info
-            badge = "🔵"
-        box(
-            f"{badge} **{a['property_short']}** — {a['title']}\n\n{a['detail']}"
-        )
+    with st.container(border=True):
         if st.button(
-            f"→ Zur Detailansicht ({a['property_short']})",
-            key=f"alert_nav_{a['property_id']}_{a['id']}",
+            p["address"],
+            key=f"open_{p['property_id']}",
             type="tertiary",
+            use_container_width=True,
         ):
-            st.session_state["selected_property_id"] = a["property_id"]
-            st.query_params["property_id"] = a["property_id"]
+            st.session_state["selected_property_id"] = p["property_id"]
+            st.query_params["property_id"] = p["property_id"]
             st.switch_page("views/wohnung.py")
+
+        cols = st.columns(5)
+        with cols[0]:
+            st.caption("Wohnfläche")
+            st.write(f"**{p['wohnflaeche_sqm']} m²**")
+        with cols[1]:
+            st.caption("Kaufdatum")
+            st.write(f"**{german_date(p['purchase_date'])}**")
+        with cols[2]:
+            st.caption("Kaufpreis")
+            st.write(f"**{euro(p['purchase_price'])}**")
+        with cols[3]:
+            st.caption("Kaltmiete (mtl.)")
+            st.write(f"**{euro(p['kaltmiete_monthly'])}**")
+        with cols[4]:
+            st.caption("Finanzierung")
+            if loan:
+                st.write(f"**{loan['bank']}**")
+            else:
+                st.write("⚠️ **Daten fehlen**")
+
+        for a in prominent:
+            badge = "🔴" if a["severity"] == "urgent" else "🟠"
+            st.markdown(f"{badge} **{a['title']}**")
+
+        if other:
+            label_noun = "Hinweis" if len(other) == 1 else "Hinweise"
+            with st.expander(f"ℹ️ {len(other)} weitere{'' if len(other) == 1 else ''} {label_noun}", expanded=False):
+                for a in other:
+                    st.markdown(f"**{a['title']}**  \n{a['detail']}")
 
 st.divider()
 
@@ -174,45 +166,6 @@ st.plotly_chart(fig, use_container_width=True)
 st.caption(
     "Grün = positiver Cashflow, rot = negativer Cashflow. Hover für die Aufschlüsselung in Kaltmiete, Bewirtschaftung und Annuität."
 )
-
-st.divider()
-
-st.subheader("Wohnungen")
-st.caption("Klicke auf eine Adresse, um zur Detailansicht zu wechseln.")
-
-for p in resolved:
-    loan = get_loan(p["property_id"])
-    with st.container(border=True):
-        if st.button(
-            p["address"],
-            key=f"open_{p['property_id']}",
-            type="tertiary",
-            use_container_width=True,
-        ):
-            st.session_state["selected_property_id"] = p["property_id"]
-            st.query_params["property_id"] = p["property_id"]
-            st.switch_page("views/wohnung.py")
-
-        cols = st.columns(5)
-        with cols[0]:
-            st.caption("Wohnfläche")
-            st.write(f"**{p['wohnflaeche_sqm']} m²**")
-        with cols[1]:
-            st.caption("Kaufdatum")
-            st.write(f"**{german_date(p['purchase_date'])}**")
-        with cols[2]:
-            st.caption("Kaufpreis")
-            st.write(f"**{euro(p['purchase_price'])}**")
-        with cols[3]:
-            st.caption("Kaltmiete (mtl.)")
-            st.write(f"**{euro(p['kaltmiete_monthly'])}**")
-        with cols[4]:
-            st.caption("Finanzierung")
-            if loan:
-                st.write(f"**{loan['bank']}**")
-            else:
-                st.write("⚠️ **Daten fehlen**")
-
 
 st.divider()
 st.subheader("Steuerberater-Export")
