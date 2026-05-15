@@ -75,3 +75,4 @@ LOANS = [
 ]
 
 LOANS_BY_PROPERTY_ID = {loan["property_id"]: loan for loan in LOANS}
+PROPERTIES_BY_ID = {p["property_id"]: p for p in PORTFOLIO}
