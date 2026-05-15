@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.title("Hello Portivo")
+st.title("Portivo — v0")
 st.write("Built by Leon Kleinau")
 
 col1, col2, col3 = st.columns(3)
