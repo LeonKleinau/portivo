@@ -73,6 +73,10 @@ def stat(label, value):
     )
 
 
+def is_sold(prop):
+    return bool(prop) and prop.get("status") == "sold"
+
+
 def get_property(property_id):
     user_props = st.session_state.get("user_properties", {})
     if property_id in user_props:

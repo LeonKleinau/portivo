@@ -69,6 +69,49 @@ def equity_buildup(
     return out
 
 
+def realized_return(prop, loan):
+    if not prop or prop.get("status") != "sold":
+        return None
+    from datetime import date as _date
+
+    if not prop.get("verkaufs_datum") or not prop.get("verkaufspreis"):
+        return None
+    purchase = _date.fromisoformat(prop["purchase_date"])
+    sale = _date.fromisoformat(prop["verkaufs_datum"])
+    holding_years = (sale - purchase).days / 365.25
+    ten_year_anniversary = _date(purchase.year + 10, purchase.month, purchase.day)
+    spek_frist_passed = sale >= ten_year_anniversary
+
+    rest_at_sale = (
+        projected_restschuld(loan, prop["purchase_date"], today=sale) if loan else 0
+    )
+
+    verkaufspreis = float(prop["verkaufspreis"])
+    verkaufsnebenkosten = float(prop.get("verkaufsnebenkosten", 0))
+
+    netto_erlos = verkaufspreis - verkaufsnebenkosten - rest_at_sale
+    initial_eigenkapital = (
+        prop["purchase_price"] + prop["kaufnebenkosten_total"]
+    ) - (loan["darlehenssumme"] if loan else 0)
+    veraeusserungsgewinn = (
+        verkaufspreis - prop["purchase_price"] - prop["kaufnebenkosten_total"]
+    )
+
+    return {
+        "holding_years": holding_years,
+        "verkaufspreis": verkaufspreis,
+        "verkaufsnebenkosten": verkaufsnebenkosten,
+        "rest_at_sale": rest_at_sale,
+        "netto_erlos": netto_erlos,
+        "initial_eigenkapital": initial_eigenkapital,
+        "wealth_multiple": (
+            netto_erlos / initial_eigenkapital if initial_eigenkapital > 0 else 0
+        ),
+        "veraeusserungsgewinn": veraeusserungsgewinn,
+        "spek_frist_passed": spek_frist_passed,
+    }
+
+
 def irr(cashflows, tol=1e-7, max_iter=200):
     if not cashflows or len(cashflows) < 2:
         return None

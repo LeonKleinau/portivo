@@ -12,6 +12,7 @@ from calculations import (
     gesamtrendite_components,
     gross_yield,
     net_yield,
+    realized_return,
     restschuld_is_projection,
     true_total_return,
 )
@@ -22,6 +23,7 @@ from utils import (
     german_date,
     get_loan,
     get_property,
+    is_sold,
     parse_german_number,
     percent,
     save_user_loan,
@@ -231,6 +233,55 @@ edit_mode = st.session_state.get(edit_mode_key, False)
 
 st.title(p["address"])
 st.caption(p["property_id"])
+
+if is_sold(p):
+    rr = realized_return(p, loan)
+    st.success(
+        f"🏆 **Verkauft am {german_date(p['verkaufs_datum'])}**"
+        if p.get("verkaufs_datum")
+        else "🏆 **Verkauft**"
+    )
+    if rr is not None:
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Verkaufspreis", euro(rr["verkaufspreis"]))
+        k2.metric("Netto-Erlös", euro(rr["netto_erlos"]))
+        k3.metric(
+            "Wealth Multiple",
+            f"{rr['wealth_multiple']:.2f}×".replace(".", ","),
+        )
+        k4.metric(
+            "Haltedauer",
+            f"{rr['holding_years']:.1f} Jahre".replace(".", ","),
+        )
+
+        if rr["spek_frist_passed"]:
+            st.info(
+                f"🟢 **Spekulationsfrist bestanden** — Veräußerungsgewinn "
+                f"von {euro(rr['veraeusserungsgewinn'])} steuerfrei."
+            )
+        else:
+            st.warning(
+                f"🟠 **Spekulationsfrist nicht erreicht** — Veräußerungsgewinn "
+                f"von {euro(rr['veraeusserungsgewinn'])} unterliegt der "
+                f"Einkommensteuer (kein Privileg nach § 23 EStG)."
+            )
+
+        st.divider()
+        st.markdown("##### Verkaufsdetails")
+        v1, v2, v3 = st.columns(3)
+        with v1:
+            stat("Kaufdatum", german_date(p["purchase_date"]))
+            stat("Kaufpreis", euro(p["purchase_price"]))
+            stat("Kaufnebenkosten", euro(p["kaufnebenkosten_total"]))
+        with v2:
+            stat("Verkaufsdatum", german_date(p["verkaufs_datum"]))
+            stat("Verkaufspreis", euro(rr["verkaufspreis"]))
+            stat("Verkaufsnebenkosten", euro(rr["verkaufsnebenkosten"]))
+        with v3:
+            stat("Eingesetztes Eigenkapital", euro(rr["initial_eigenkapital"]))
+            stat("Restschuld bei Verkauf", euro(rr["rest_at_sale"]))
+            stat("Veräußerungsgewinn", euro(rr["veraeusserungsgewinn"]))
+    st.stop()
 
 if edit_mode:
     st.caption(

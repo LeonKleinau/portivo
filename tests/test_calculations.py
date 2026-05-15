@@ -14,6 +14,7 @@ from calculations import (
     irr,
     net_yield,
     projected_restschuld,
+    realized_return,
     restschuld_is_projection,
     scenario_projection,
     tax_summary,
@@ -369,6 +370,80 @@ def test_ber001_amortisation_year_one_matches_excel():
     assert y1["principal"] == pytest.approx(6_720)
     assert y1["annuity"] == pytest.approx(11_760)
     assert y1["closing_balance"] == pytest.approx(329_280)
+
+
+# --- realized_return ---
+
+
+def test_realized_return_none_for_active_property():
+    prop = {"status": "active", "purchase_date": "2020-01-01"}
+    assert realized_return(prop, None) is None
+
+
+def test_realized_return_none_when_missing_sale_data():
+    prop = {"status": "sold", "purchase_date": "2020-01-01"}
+    assert realized_return(prop, None) is None
+
+
+def test_realized_return_basic_no_loan():
+    prop = {
+        "status": "sold",
+        "purchase_date": "2014-01-01",
+        "verkaufs_datum": "2024-01-01",
+        "purchase_price": 200_000,
+        "kaufnebenkosten_total": 20_000,
+        "verkaufspreis": 350_000,
+        "verkaufsnebenkosten": 17_500,
+    }
+    rr = realized_return(prop, None)
+    assert rr is not None
+    assert rr["holding_years"] == pytest.approx(10.0, abs=0.01)
+    assert rr["rest_at_sale"] == 0
+    assert rr["netto_erlos"] == pytest.approx(332_500)
+    assert rr["initial_eigenkapital"] == pytest.approx(220_000)
+    assert rr["wealth_multiple"] == pytest.approx(332_500 / 220_000)
+    assert rr["veraeusserungsgewinn"] == pytest.approx(130_000)
+    assert rr["spek_frist_passed"] is True
+
+
+def test_realized_return_spek_frist_not_passed_under_10y():
+    prop = {
+        "status": "sold",
+        "purchase_date": "2018-01-01",
+        "verkaufs_datum": "2025-01-01",
+        "purchase_price": 200_000,
+        "kaufnebenkosten_total": 20_000,
+        "verkaufspreis": 300_000,
+        "verkaufsnebenkosten": 15_000,
+    }
+    rr = realized_return(prop, None)
+    assert rr["spek_frist_passed"] is False
+
+
+def test_ber005_realized_return_matches_excel():
+    # BER-005 demo property, 10.5 year hold, tax-free
+    prop = {
+        "status": "sold",
+        "purchase_date": "2014-03-10",
+        "verkaufs_datum": "2024-09-15",
+        "purchase_price": 280_000,
+        "kaufnebenkosten_total": 28_000,
+        "verkaufspreis": 510_000,
+        "verkaufsnebenkosten": 25_500,
+    }
+    loan = {
+        "darlehenssumme": 220_000,
+        "zinssatz_pct": 2.5,
+        "tilgung_anfang_pct": 1.5,
+    }
+    rr = realized_return(prop, loan)
+    assert 10.4 < rr["holding_years"] < 10.6
+    assert rr["spek_frist_passed"] is True
+    assert rr["initial_eigenkapital"] == pytest.approx(88_000)
+    assert rr["veraeusserungsgewinn"] == pytest.approx(202_000)
+    # rest_at_sale should be < darlehenssumme (some Tilgung happened over 10y)
+    assert rr["rest_at_sale"] < 220_000
+    assert rr["rest_at_sale"] > 150_000
 
 
 # --- irr ---

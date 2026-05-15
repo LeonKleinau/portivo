@@ -19,6 +19,7 @@ PORTFOLIO = [
         "nebenkosten_vorauszahlung_monthly": 180,
         "kaution_eur": 2_730,
         "letzte_mieterhoehung_date": "2022-04-01",
+        "status": "active",
     },
     {
         "property_id": "BER-002",
@@ -40,6 +41,7 @@ PORTFOLIO = [
         "nebenkosten_vorauszahlung_monthly": 150,
         "kaution_eur": 1_875,
         "letzte_mieterhoehung_date": "2024-09-01",
+        "status": "active",
     },
     {
         "property_id": "BER-003",
@@ -61,6 +63,7 @@ PORTFOLIO = [
         "nebenkosten_vorauszahlung_monthly": 260,
         "kaution_eur": 3_930,
         "letzte_mieterhoehung_date": "2023-06-01",
+        "status": "active",
     },
     {
         "property_id": "BER-004",
@@ -82,6 +85,32 @@ PORTFOLIO = [
         "nebenkosten_vorauszahlung_monthly": 130,
         "kaution_eur": 1_980,
         "letzte_mieterhoehung_date": "2025-01-15",
+        "status": "active",
+    },
+    {
+        "property_id": "BER-005",
+        "address": "Linienstraße 25, 10119 Berlin",
+        "purchase_price": 280_000,
+        "kaufnebenkosten_total": 28_000,
+        "purchase_date": "2014-03-10",
+        "kaltmiete_monthly": 1_050,
+        "opex_monthly_total": 200,
+        "wohnflaeche_sqm": 60,
+        "baujahr": 1925,
+        "heizungsart": "Gas-Zentralheizung",
+        "heizung_installation_year": 2010,
+        "energieausweis_date": "2014-02-01",
+        "mietspiegel_eur_per_sqm": 16.50,
+        "mieter_name": "Familie Hoffmann (ehem.)",
+        "mietbeginn_date": "2014-06-01",
+        "mietart": "Unbefristet",
+        "nebenkosten_vorauszahlung_monthly": 200,
+        "kaution_eur": 3_150,
+        "letzte_mieterhoehung_date": "2021-03-01",
+        "status": "sold",
+        "verkaufs_datum": "2024-09-15",
+        "verkaufspreis": 510_000,
+        "verkaufsnebenkosten": 25_500,
     },
 ]
 
@@ -112,6 +141,15 @@ LOANS = [
         "zinssatz_pct": 1.8,
         "zinsbindung_end": "2027-11-20",
         "tilgung_anfang_pct": 2.0,
+    },
+    {
+        "loan_id": "LOAN-BER-005",
+        "property_id": "BER-005",
+        "bank": "Sparkasse",
+        "darlehenssumme": 220_000,
+        "zinssatz_pct": 2.5,
+        "zinsbindung_end": "2024-03-10",
+        "tilgung_anfang_pct": 1.5,
     },
 ]
 

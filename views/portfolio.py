@@ -3,28 +3,30 @@ from datetime import date
 import plotly.graph_objects as go
 import streamlit as st
 
-from calculations import cash_on_cash, gross_yield, net_yield, tax_summary
+from calculations import cash_on_cash, gross_yield, net_yield, realized_return, tax_summary
 from engagement import all_alerts
 from seed_portfolio import PORTFOLIO
-from utils import euro, german_date, get_loan, get_property, percent
+from utils import euro, german_date, get_loan, get_property, is_sold, percent
 
 st.title("Portivo")
 st.caption("Portfolio-Übersicht")
 
 resolved = [get_property(p["property_id"]) for p in PORTFOLIO]
+active = [p for p in resolved if not is_sold(p)]
+sold = [p for p in resolved if is_sold(p)]
 
-total_purchase_price = sum(p["purchase_price"] for p in resolved)
+total_purchase_price = sum(p["purchase_price"] for p in active)
 total_invested = sum(
-    p["purchase_price"] + p["kaufnebenkosten_total"] for p in resolved
+    p["purchase_price"] + p["kaufnebenkosten_total"] for p in active
 )
-total_annual_rent = sum(p["kaltmiete_monthly"] * 12 for p in resolved)
-total_annual_opex = sum(p["opex_monthly_total"] * 12 for p in resolved)
-monthly_kaltmiete = sum(p["kaltmiete_monthly"] for p in resolved)
-n_properties = len(resolved)
+total_annual_rent = sum(p["kaltmiete_monthly"] * 12 for p in active)
+total_annual_opex = sum(p["opex_monthly_total"] * 12 for p in active)
+monthly_kaltmiete = sum(p["kaltmiete_monthly"] for p in active)
+n_properties = len(active)
 
 total_eigenkapital = 0
 total_annual_debt = 0
-for p in resolved:
+for p in active:
     loan = get_loan(p["property_id"])
     total_acq = p["purchase_price"] + p["kaufnebenkosten_total"]
     if loan:
@@ -73,7 +75,7 @@ st.divider()
 st.subheader("Wohnungen")
 st.caption("Klicke auf eine Adresse, um zur Detailansicht zu wechseln.")
 
-for p in resolved:
+for p in active:
     loan = get_loan(p["property_id"])
     alerts = all_alerts(p, loan)
     prominent = [a for a in alerts if a["severity"] in ("urgent", "warning")]
@@ -122,12 +124,60 @@ for p in resolved:
 
 st.divider()
 
+if sold:
+    st.divider()
+    st.subheader("🏆 Veräußerte Wohnungen")
+    st.caption("Trophäen-Sammlung: realisierte Erlöse aus Verkäufen.")
+    for p in sold:
+        loan = get_loan(p["property_id"])
+        rr = realized_return(p, loan)
+        with st.container(border=True):
+            if st.button(
+                f"🏆  {p['address']}",
+                key=f"sold_{p['property_id']}",
+                type="tertiary",
+                use_container_width=True,
+            ):
+                st.session_state["selected_property_id"] = p["property_id"]
+                st.query_params["property_id"] = p["property_id"]
+                st.switch_page("views/wohnung.py")
+            scols = st.columns(5)
+            with scols[0]:
+                st.caption("Verkauft am")
+                st.write(
+                    f"**{german_date(p['verkaufs_datum'])}**"
+                    if p.get("verkaufs_datum")
+                    else "—"
+                )
+            with scols[1]:
+                st.caption("Verkaufspreis")
+                st.write(f"**{euro(p['verkaufspreis'])}**" if p.get("verkaufspreis") else "—")
+            with scols[2]:
+                st.caption("Netto-Erlös")
+                st.write(f"**{euro(rr['netto_erlos'])}**" if rr else "—")
+            with scols[3]:
+                st.caption("Wealth Multiple")
+                if rr:
+                    st.write(f"**{rr['wealth_multiple']:.2f}×**".replace(".", ","))
+                else:
+                    st.write("—")
+            with scols[4]:
+                st.caption("Haltedauer")
+                if rr:
+                    st.write(f"**{rr['holding_years']:.1f} J.**".replace(".", ","))
+                else:
+                    st.write("—")
+            if rr and rr["spek_frist_passed"]:
+                st.markdown("🟢 **Spekulationsfrist bestanden** — Verkaufsgewinn steuerfrei")
+
+st.divider()
+
 chart_labels = []
 chart_net = []
 chart_rents = []
 chart_opex = []
 chart_annuity = []
-for p in resolved:
+for p in active:
     chart_labels.append(p["address"].split(",")[0])
     monthly_rent = p["kaltmiete_monthly"]
     monthly_opex = p["opex_monthly_total"]
@@ -203,7 +253,7 @@ selected_year = st.selectbox(
 )
 
 tax_rows = []
-for p in resolved:
+for p in active:
     loan_for_tax = get_loan(p["property_id"])
     s = tax_summary(p, loan_for_tax, year=selected_year)
     if s:
